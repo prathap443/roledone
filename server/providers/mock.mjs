@@ -54,6 +54,25 @@ export function createMockProvider() {
           follow_up: 'What would you do differently next time?',
         };
       }
+      if (tool.name === 'write_questions') {
+        const ev = context.requirements.filter((r) => r.status === 'evidence'), gaps = context.requirements.filter((r) => r.status !== 'evidence');
+        const q = (prompt, type, focus) => ({ prompt, type, focus, why: 'Mock rationale.', listen_for: ['Specific example', 'Your own contribution'] });
+        return { questions: [
+          q(`Walk me through how you used ${ev[0]?.name || 'your main tool'} on a recent project.`, 'depth', ev[0]?.name || ''),
+          q(`What went wrong the last time you worked with ${ev[1]?.name || 'a pipeline'} and how did you fix it?`, 'depth', ev[1]?.name || ''),
+          q(`This role needs ${gaps[0]?.name || 'a new tool'}. How would you get productive with it in your first month?`, 'gap', gaps[0]?.name || ''),
+          q('Tell me about a time a stakeholder disagreed with your technical recommendation.', 'behavioural', ''),
+          q('A nightly load fails at 3am and the business report is due at 8am. Talk me through your first hour.', 'scenario', ''),
+        ] };
+      }
+      if (tool.name === 'ask_about_gap') {
+        return { intro: `The advert asks for ${context.requirement.name}.`, questions: [`Have you used ${context.requirement.name} or an equivalent tool? Where?`, 'What did you build or change with it, and what was the outcome?'] };
+      }
+      if (tool.name === 'draft_bullet') {
+        const joined = context.answers.join(' ');
+        if (/\b(no|never|not really|haven't|have not)\b/i.test(joined) && joined.length < 80) return { verdict: 'unsupported', bullet: '', explanation: 'Your answers do not describe hands-on experience.', learning_line: `Currently learning ${context.requirement.name}.` };
+        return { verdict: 'supported', bullet: `Used ${context.requirement.name}: ${context.answers[0].trim()}`, explanation: 'Drafted from your first answer.', learning_line: '' };
+      }
       throw new Error(`mock provider: unknown tool ${tool.name}`);
     },
   };

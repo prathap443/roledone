@@ -136,3 +136,52 @@ export function validateFeedback(raw) {
     follow_up: asText(raw?.follow_up, LIMITS.note),
   };
 }
+
+/** Generated interview questions: shape, caps, and no empty prompts. */
+export function validateQuestions(raw, { requirements = [] } = {}) {
+  const names = new Set(requirements.map((r) => normalise(r.name)));
+  const TYPES = new Set(['depth', 'gap', 'behavioural', 'scenario']);
+  const out = [];
+  for (const q of Array.isArray(raw?.questions) ? raw.questions : []) {
+    if (out.length >= 8) break;
+    const prompt = asText(q?.prompt, LIMITS.question);
+    if (prompt.length < 15) continue;
+    const focus = asText(q?.focus, 80);
+    out.push({
+      id: `q${out.length + 1}`,
+      prompt,
+      type: TYPES.has(q?.type) ? q.type : 'depth',
+      focus: names.has(normalise(focus)) ? focus : '',
+      why: asText(q?.why, LIMITS.note),
+      listen_for: (Array.isArray(q?.listen_for) ? q.listen_for : []).map((s) => asText(s, 160)).filter(Boolean).slice(0, 4),
+    });
+  }
+  return { questions: out };
+}
+
+/** Gap Interview questions for one requirement. */
+export function validateGapQuestions(raw) {
+  const questions = (Array.isArray(raw?.questions) ? raw.questions : []).map((q) => asText(q, LIMITS.question)).filter((q) => q.length >= 10).slice(0, 4);
+  return { questions, intro: asText(raw?.intro, LIMITS.note) };
+}
+
+/**
+ * A bullet drafted from the candidate's own Gap Interview answers.
+ * Numbers must come from the answers or the CV; names of OTHER gap requirements are not allowed.
+ * `verdict` says whether the answers actually support the requirement.
+ */
+export function validateGapBullet(raw, { cv, answers, requirement, otherGaps = [] }) {
+  const verdict = ['supported', 'adjacent', 'unsupported'].includes(raw?.verdict) ? raw.verdict : 'unsupported';
+  const bullet = asText(raw?.bullet, 600);
+  const explanation = asText(raw?.explanation, LIMITS.note);
+  const result = { verdict, bullet: '', explanation, learning_line: asText(raw?.learning_line, 300), rejected: null };
+  if (verdict === 'unsupported' || !bullet) return result;
+  const sources = [cv, ...answers];
+  const badNumbers = unsupportedNumbers(bullet, sources);
+  if (badNumbers.length) { result.rejected = `unsupported numbers: ${badNumbers.join(', ')}`; result.verdict = 'unsupported'; return result; }
+  const b = normalise(bullet);
+  const smuggled = otherGaps.map(normalise).filter((g) => g && g !== normalise(requirement) && b.includes(g) && !sources.some((s) => normalise(s).includes(g)));
+  if (smuggled.length) { result.rejected = `introduces "${smuggled[0]}" without evidence`; result.verdict = 'unsupported'; return result; }
+  result.bullet = bullet;
+  return result;
+}

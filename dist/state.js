@@ -19,6 +19,10 @@ export const blank = () => ({
   suggestions: null,    // AI suggestions for the current draft, or null
   dismissed: [],
   applied: [],
+  plan: 'free',         // developer preview until accounts exist
+  questions: null,      // AI-written interview questions for this role
+  questionLevel: 'technical',
+  gaps: {},             // requirement id -> { questions, answers, result } from the Gap Interview
 });
 
 export const state = blank();
@@ -60,7 +64,7 @@ export function setSources({ cv = state.cv, jd = state.jd }) {
   state.cv = cv;
   state.jd = jd;
   if (cvChanged) { state.draft = null; state.suggestions = null; state.dismissed = []; state.applied = []; }
-  if (cvChanged || jdChanged) { state.answers = {}; state.feedback = {}; state.requirements = null; state.matchMeta = null; session.question = 0; }
+  if (cvChanged || jdChanged) { state.answers = {}; state.feedback = {}; state.requirements = null; state.matchMeta = null; state.questions = null; state.gaps = {}; session.question = 0; }
   save();
 }
 

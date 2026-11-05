@@ -1,4 +1,6 @@
 import { state, requirements } from '../state.js';
+import { evidenceScore } from '../core.js';
+import { plan, PLANS } from '../plans.js';
 import { heading } from '../ui.js';
 import { aiAvailable, providerLabel } from '../api.js';
 
@@ -6,12 +8,12 @@ const two = (n) => String(n).padStart(2, '0');
 
 export function render() {
   const rows = requirements();
-  const evidence = rows.filter((r) => r.status !== 'gap').length;
+  const score = evidenceScore(rows);
   const practised = Object.values(state.answers).filter((a) => a.trim()).length;
   return heading('MAKE YOUR NEXT MOVE COUNT', 'Your next chapter starts here.', 'A little clarity. A stronger story. A role that fits.', '<button class="primary" data-page="match">Start a role match <span>↗</span></button>') + `
 <section class="hero"><div class="hero-copy"><div class="eyebrow">GOOD WORK DESERVES TO BE SEEN</div><h2>You have the experience.<br>Let’s find <em>the words.</em></h2><p>Connect what you’ve done with where you want to go. One thoughtful application at a time.</p><button class="primary lime" id="demo">Explore a sample journey <span>↗</span></button></div><div class="orbit" aria-hidden="true"><div class="orbit-ring"></div><div class="orbit-ring"></div><div class="orbit-ring"></div><div class="orbit-ring"></div><div class="orbit-core">↗</div><div class="orbit-chip chip-one"><span>✓</span> Your experience</div><div class="orbit-chip chip-two"><span>◎</span> Your next role</div><div class="orbit-chip chip-three"><span>✧</span> A story only you can tell</div></div></section>
 <section class="metrics" aria-label="Your progress">
- <div class="metric"><div class="metric-top"><span>Requirements with evidence</span><span>◎</span></div><strong>${two(evidence)}</strong><small>${rows.length ? `of ${rows.length} ${state.requirements ? 'requirements found' : 'recognised terms'}` : 'Start with a role match'}</small></div>
+ <div class="metric"><div class="metric-top"><span>Evidence Score</span><span>◎</span></div><strong>${score ? score.score : '—'}</strong><small>${score ? `${score.gap} missing · ${score.partial} partial · ${PLANS[plan()].label} plan` : 'Scan a role to get your score'}</small></div>
  <div class="metric"><div class="metric-top"><span>Answers practised</span><span>◌</span></div><strong>${two(practised)}</strong><small>Your interview preparation</small></div>
  <div class="metric"><div class="metric-top"><span>Applications tracked</span><span>↗</span></div><strong>${two(state.applications.length)}</strong><small>Your next opportunities</small></div>
 </section>

@@ -54,6 +54,9 @@ const text = (v, max, field, { required = true } = {}) => {
   return v;
 };
 
+const reqList = (v) => (Array.isArray(v) ? v : []).slice(0, LIMITS.requirements)
+  .map((r) => ({ name: text(r?.name, 80, 'requirement.name'), status: ['evidence', 'partial', 'gap'].includes(r?.status) ? r.status : 'gap' }));
+
 export function createHandler({ ai, root = resolve('dist'), rateLimit = createRateLimiter(), log = console } = {}) {
   const send = (res, status, body, headers = {}) => {
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers });
@@ -76,9 +79,26 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
     }
     if (pathname === '/api/suggestions') {
       const cv = text(body.cv, LIMITS.text, 'cv'), draft = text(body.draft, LIMITS.text, 'draft'), jd = text(body.jd, LIMITS.text, 'jd', { required: false });
-      const requirements = (Array.isArray(body.requirements) ? body.requirements : []).slice(0, LIMITS.requirements)
-        .map((r) => ({ name: text(r?.name, 80, 'requirement.name'), status: ['evidence', 'partial', 'gap'].includes(r?.status) ? r.status : 'gap' }));
-      return send(res, 200, await ai.suggest({ cv, draft, jd, requirements }));
+      return send(res, 200, await ai.suggest({ cv, draft, jd, requirements: reqList(body.requirements) }));
+    }
+    if (pathname === '/api/questions') {
+      const cv = text(body.cv, LIMITS.text, 'cv'), jd = text(body.jd, LIMITS.text, 'jd');
+      const level = ['screening', 'technical', 'senior'].includes(body.level) ? body.level : 'technical';
+      return send(res, 200, await ai.questions({ cv, jd, requirements: reqList(body.requirements), level }));
+    }
+    if (pathname === '/api/gap-questions') {
+      const cv = text(body.cv, LIMITS.text, 'cv'), jd = text(body.jd, LIMITS.text, 'jd', { required: false });
+      const requirement = { name: text(body.requirement?.name, 80, 'requirement.name'), source: text(body.requirement?.source, 400, 'requirement.source', { required: false }) };
+      return send(res, 200, await ai.gapQuestions({ cv, jd, requirement }));
+    }
+    if (pathname === '/api/gap-bullet') {
+      const cv = text(body.cv, LIMITS.text, 'cv');
+      const requirement = { name: text(body.requirement?.name, 80, 'requirement.name') };
+      const questions = (Array.isArray(body.questions) ? body.questions : []).slice(0, 4).map((q) => text(q, LIMITS.question, 'question'));
+      const answers = (Array.isArray(body.answers) ? body.answers : []).slice(0, 4).map((a) => text(a, 2000, 'answer', { required: false }));
+      if (!questions.length || !answers.some((a) => a.trim().length >= 10)) throw new HttpError(400, 'Answer at least one question in a sentence or two.');
+      const otherGaps = reqList(body.otherGaps).map((r) => r.name);
+      return send(res, 200, await ai.gapBullet({ cv, requirement, questions, answers, otherGaps }));
     }
     if (pathname === '/api/feedback') {
       const question = text(body.question, LIMITS.question, 'question'), answer = text(body.answer, LIMITS.answer, 'answer'), cv = text(body.cv, LIMITS.text, 'cv', { required: false });

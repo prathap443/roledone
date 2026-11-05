@@ -72,3 +72,8 @@ export const pill = (status) => ({
   partial: '<span class="pill partial">Partial mention</span>',
   gap: '<span class="pill gap">Evidence to clarify</span>',
 }[status] || '');
+
+/** Locked-feature panel shown to plans without access. */
+export function locked({ title, body, plan, compact = false }) {
+  return `<div class="locked ${compact ? 'compact' : ''}"><div class="locked-badge">${esc(plan)}</div><h3>${esc(title)}</h3><p>${esc(body)}</p><button class="primary lime" data-upgrade>See plans ↗</button></div>`;
+}
