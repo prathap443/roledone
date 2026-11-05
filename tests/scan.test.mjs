@@ -73,3 +73,41 @@ test('overall score is a weighted blend with bands, and never throws on odd inpu
   assert.equal(scanCV('').score, 0);
   assert.equal(scanCV('   \n\n').band, 'needs-work');
 });
+
+import { achievementLines } from '../dist/scan.js';
+test('achievement lines come from experience paragraphs, not skills lists, titles or certifications', () => {
+  const paragraphCV = `JANE EXAMPLE
+Senior Data Engineer | jane@example.com | +44 7700 900000
+
+Professional Summary
+Senior engineer with 10 years in data platforms.
+
+Skills
+• Azure Synapse Analytics
+• Azure Data Factory
+• Databricks
+• PySpark
+• Terraform
+• Power BI
+
+Experience
+Senior Data Engineer, Agency A — Jan 2021 to Present
+Led the migration of a 40 TB on-premise warehouse to Azure Synapse, cutting the nightly batch from 7 hours to 2. Designed the medallion architecture adopted across three departments. Responsible for the Data Factory estate of 120 pipelines and mentored two junior engineers.
+Data Engineer, Company B — 2017 to 2020
+Built PySpark jobs for event data and automated reconciliation that saved 8 hours a week.
+
+Certifications
+• Microsoft Certified: Azure Data Engineer Associate
+• Microsoft Certified: Azure Solutions Architect Expert
+
+Education
+BSc, 2010`;
+  const lines = achievementLines(paragraphCV);
+  assert.ok(lines.length >= 4, JSON.stringify(lines));
+  assert.ok(lines.every((l) => !/Microsoft Certified|Azure Synapse Analytics$|Jan 2021/.test(l)), JSON.stringify(lines));
+  assert.ok(lines.some((l) => l.startsWith('Led the migration')));
+  assert.ok(lines.some((l) => l.startsWith('Responsible for')));
+  const impact = scanImpact(paragraphCV);
+  assert.equal(impact.total, lines.length);
+  assert.ok(impact.quantified >= 3 && impact.weak === 1, JSON.stringify(impact));
+});

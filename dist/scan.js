@@ -79,10 +79,37 @@ export function scanParse(text) {
   return { score: clamp((100 * got) / max), checks };
 }
 
-export function scanImpact(text) {
+/** Lines that are headings, job titles with dates, contact lines or comma-separated skill lists are not achievements. */
+const OTHER_HEADINGS = /^(certifications?|accreditations?|projects?|publications?|interests|hobbies|references|languages|awards|volunteering|training|courses)\b/i;
+const isHeadingLike = (l) => l.length < 60 && [...Object.values(HEADINGS), OTHER_HEADINGS].some((re) => re.test(l.replace(/[:#*_]/g, '').trim()));
+const isTitleLine = (l) => words(l) <= 14 && /\b(19[89]\d|20[0-4]\d|present|current)\b/i.test(l);
+const isContactLine = (l) => /@|\+?\d[\d\s-]{8,}|linkedin|github\.com/i.test(l) && words(l) <= 20;
+const isListLike = (l) => (l.split(/[,|•·]/).length - 1) >= Math.max(3, words(l) / 3);
+
+/** Candidate achievement statements: bullets or sentences from the experience section (or whole CV). */
+export function achievementLines(text) {
   const ls = lines(text);
-  const bulletLines = ls.filter(isBullet).map(stripBullet);
-  const candidates = (bulletLines.length >= 5 ? bulletLines : ls.filter((l) => words(l) >= 6)).filter((l) => words(l) >= 5 && words(l) <= 60);
+  const headingAt = (re) => ls.findIndex((l) => l.length < 60 && re.test(l.replace(/[:#*_]/g, '').trim()));
+  const start = headingAt(HEADINGS.experience);
+  let region = ls;
+  if (start >= 0) {
+    const after = ls.slice(start + 1);
+    const end = after.findIndex((l) => isHeadingLike(l) && !HEADINGS.experience.test(l));
+    region = end >= 0 ? after.slice(0, end) : after;
+  }
+  const out = [];
+  for (const raw of region) {
+    const l = stripBullet(raw);
+    if (isHeadingLike(l) || isTitleLine(l) || isContactLine(l) || isListLike(l)) continue;
+    const sentences = l.split(/(?<=[.!?])\s+(?=[A-Z])/);
+    const pieces = sentences.length > 1 && words(l) > 25 ? sentences : [l];
+    for (const piece of pieces) { const w = words(piece); if (w >= 5 && w <= 60) out.push(piece.trim()); }
+  }
+  return out;
+}
+
+export function scanImpact(text) {
+  const candidates = achievementLines(text);
   const quantified = candidates.filter((l) => QUANTIFIED.test(l));
   const strong = candidates.filter((l) => STRONG_VERBS.test(l));
   const weak = candidates.filter((l) => WEAK_STARTS.test(l));
