@@ -36,6 +36,14 @@ npm test
 - Consent prompt before the first request; text is sent only when an AI button is pressed; the server does not store or log document bodies.
 - Rate limiting, 256 KB body cap, 50,000-character field caps, Content-Security-Policy, and a 60 s upstream timeout.
 
+- **Evidence Score** (0–100) — weighted coverage of the role's requirements: must-haves count fully, nice-to-haves half, partial mentions half credit. Shown with its breakdown; not an ATS score.
+- **Gap Interview** — for each missing requirement, Claude asks two or three concrete questions; if the answers show real experience it drafts one bullet from the candidate's own words (numbers must come from the answers or CV; other missing skills cannot be smuggled in) and the user adds it to the draft. If not, it offers a truthful learning-goal line. Nothing is ever added without the user's own account of it.
+- **Generated interview questions** — five questions written from the requirements and the CV at recruiter-screen, technical or senior-panel level, with "listen for" notes revealed after review.
+
+### Plans (developer preview)
+
+Free: scan, Evidence Score, and the full list of what is missing. Pro: suggestions, Gap Interview, CV studio and export, generated questions and answer review. Premium: follow-ups, multiple CV versions, DOCX/PDF export (not built yet). The active plan is a workspace setting for now; entitlement enforcement arrives with accounts and payments.
+
 ### Browser-only features (always available)
 
 - Responsive desktop workspace and mobile bottom navigation.

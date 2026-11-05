@@ -19,3 +19,14 @@ test('role questions include an explicit experience gap',()=>{
  const qs=questions(analyse(sampleCV,sampleJD));
  assert.equal(qs.length,5);assert.match(qs[3],/Terraform/);
 });
+import {evidenceScore} from '../dist/core.js';
+test('evidence score weights must-haves and partial credit transparently',()=>{
+ assert.equal(evidenceScore([]),null);
+ const s=evidenceScore([
+  {kind:'must',status:'evidence'},{kind:'must',status:'gap'},{kind:'nice',status:'partial'},{kind:'responsibility',status:'evidence'}
+ ]);
+ // (1*1 + 1*0 + 0.5*0.5 + 0.75*1) / (1+1+0.5+0.75) = 2.0/3.25
+ assert.equal(s.score,62); assert.equal(s.band,'good');
+ assert.deepEqual([s.evidence,s.partial,s.gap,s.must,s.mustEvidence,s.total],[2,1,1,2,1,4]);
+ assert.equal(evidenceScore(analyse(sampleCV,sampleJD)).score,100-Math.round(100*3/10)); // 7 of 10 flat-weighted mentions
+});

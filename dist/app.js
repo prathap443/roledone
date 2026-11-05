@@ -5,6 +5,7 @@ import { sampleCV, sampleJD } from './core.js';
 import { state, session, load, save, reset, forget, setSources, setStorageErrorHandler } from './state.js';
 import { $, $$, esc, toast, modal, closeModal, confirm, download } from './ui.js';
 import { loadStatus, aiAvailable, providerLabel } from './api.js';
+import { PLANS, COMPARISON, plan } from './plans.js';
 import * as overview from './pages/overview.js';
 import * as match from './pages/match.js';
 import * as editor from './pages/editor.js';
@@ -28,6 +29,16 @@ function navigate(next) {
 function rebind(root = document) {
   const scope = typeof root === 'string' ? $(root) : root;
   $$('[data-page]', scope).forEach((b) => (b.onclick = () => navigate(b.dataset.page)));
+  $$('[data-upgrade]', scope).forEach((b) => (b.onclick = showPlans));
+}
+
+function showPlans() {
+  const current = plan();
+  modal(`<div class="eyebrow">PLANS</div><h2>See where you stand for free. Pay to close the gap.</h2>
+<p>Free scans a role and shows your Evidence Score and every missing requirement. Pro and Premium turn that into a stronger CV and a prepared interview.</p>
+<table class="plan-table"><thead><tr><th></th>${Object.entries(PLANS).map(([k, p]) => `<th class="${k === current ? 'current' : ''}">${p.label}<small>${p.price}</small></th>`).join('')}</tr></thead>
+<tbody>${COMPARISON.map(([f, ...cols]) => `<tr><td>${f}</td>${cols.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>
+<p class="hint">Payments are not live yet. You are on the <strong>${PLANS[current].label}</strong> plan${current === 'free' ? '' : ' (developer preview)'}.</p>`);
 }
 
 function render() {
@@ -73,9 +84,11 @@ $('#settings').onclick = () => {
 <p>Device saving stores CV text, drafts, answers, and applications in this browser’s local storage. This is not an encrypted document vault. Use a trusted device.</p>
 <label class="field"><span><input type="checkbox" id="remember" ${state.remember ? 'checked' : ''}> Save my workspace on this device</span></label>
 ${aiAvailable() ? `<label class="field"><span><input type="checkbox" id="consent" ${state.aiConsent ? 'checked' : ''}> Send text to ${esc(providerLabel())} without asking each time</span></label>` : ''}
+<label class="field inline">Plan (developer preview — not enforced until accounts exist)<select id="plan">${Object.entries(PLANS).map(([k, p]) => `<option value="${k}" ${plan() === k ? 'selected' : ''}>${p.label} · ${p.price}</option>`).join('')}</select></label>
 <div class="actions"><button class="secondary" id="export-workspace">Export workspace</button><button class="secondary" id="clear-workspace">Clear all workspace data</button></div>`);
   $('#remember').onchange = (e) => { state.remember = e.target.checked; if (!state.remember) forget(); save(); toast(state.remember ? 'Device saving enabled.' : 'Device saving disabled.'); };
   $('#consent') && ($('#consent').onchange = (e) => { state.aiConsent = e.target.checked; save(); });
+  $('#plan').onchange = (e) => { state.plan = e.target.value; save(); render(); toast(`${PLANS[state.plan].label} plan (preview).`); };
   $('#export-workspace').onclick = () => download('rolewoven-workspace.json', JSON.stringify(state, null, 2), 'application/json');
   $('#clear-workspace').onclick = async () => {
     closeModal();

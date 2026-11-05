@@ -2,7 +2,7 @@
 // CV and JD text are untrusted input; they are wrapped in tags and the system prompt instructs
 // the model to treat them as data. Nothing leaves here without passing validate.mjs.
 
-import { validateMatch, validateSuggestions, validateFeedback } from './validate.mjs';
+import { validateMatch, validateSuggestions, validateFeedback, validateQuestions, validateGapQuestions, validateGapBullet } from './validate.mjs';
 
 const GROUNDING_RULES = `You are the analysis engine inside Rolewoven, a career studio for UK tech professionals.
 Non-negotiable rules:
@@ -91,6 +91,49 @@ const FEEDBACK_TOOL = {
   },
 };
 
+const QUESTIONS_TOOL = {
+  name: 'write_questions',
+  description: 'Write interview questions tailored to this role and this candidate.',
+  input_schema: {
+    type: 'object', required: ['questions'],
+    properties: { questions: { type: 'array', minItems: 5, maxItems: 6, items: {
+      type: 'object', required: ['prompt', 'type', 'focus', 'why', 'listen_for'],
+      properties: {
+        prompt: { type: 'string', description: 'The question as an interviewer would ask it. Specific to the CV and role, not generic.' },
+        type: { type: 'string', enum: ['depth', 'gap', 'behavioural', 'scenario'], description: 'depth = probe an evidenced skill; gap = how they would approach something not in the CV; behavioural = a responsibility from the JD; scenario = a realistic problem from the role.' },
+        focus: { type: 'string', description: 'The requirement name this question targets (exactly as listed), or empty.' },
+        why: { type: 'string', description: 'One sentence: why an interviewer for this role asks this.' },
+        listen_for: { type: 'array', items: { type: 'string' }, description: '2–4 things a strong answer would include.' },
+      } } } },
+  },
+};
+
+const GAP_QUESTIONS_TOOL = {
+  name: 'ask_about_gap',
+  description: 'Ask the candidate short questions to discover whether they have experience relevant to a requirement missing from their CV.',
+  input_schema: {
+    type: 'object', required: ['intro', 'questions'],
+    properties: {
+      intro: { type: 'string', description: 'One sentence framing, e.g. what the role means by this requirement.' },
+      questions: { type: 'array', minItems: 2, maxItems: 3, items: { type: 'string' }, description: 'Concrete yes/no-plus-detail questions. Mention adjacent tools or equivalents the candidate may have used instead.' },
+    },
+  },
+};
+
+const GAP_BULLET_TOOL = {
+  name: 'draft_bullet',
+  description: 'Decide whether the candidate’s answers support the requirement and, if so, draft one CV bullet from their answers.',
+  input_schema: {
+    type: 'object', required: ['verdict', 'bullet', 'explanation', 'learning_line'],
+    properties: {
+      verdict: { type: 'string', enum: ['supported', 'adjacent', 'unsupported'], description: 'supported = answers show direct experience; adjacent = related experience worth stating honestly; unsupported = no real experience described.' },
+      bullet: { type: 'string', description: 'One CV bullet in the candidate’s own facts and numbers ONLY. Empty string if unsupported. For adjacent, state the related experience truthfully without claiming the exact tool.' },
+      explanation: { type: 'string', description: 'One or two sentences to the candidate explaining the verdict.' },
+      learning_line: { type: 'string', description: 'If unsupported or adjacent: a truthful one-line way to mention it as a current learning goal, or empty.' },
+    },
+  },
+};
+
 export function createAI(provider) {
   return {
     provider,
@@ -121,6 +164,41 @@ export function createAI(provider) {
       });
       const { suggestions, rejected } = validateSuggestions(raw, { cv, draft, requirements });
       return { suggestions, meta: { provider: provider.name, model: provider.model, rejected: rejected.length } };
+    },
+
+    async questions({ cv, jd, requirements, level = 'technical' }) {
+      const list = requirements.map((r) => `- ${r.name} [${r.status}]`).join('\n');
+      const raw = await provider.complete({
+        system: GROUNDING_RULES,
+        user: `Write 5 interview questions for this candidate and role at ${level === 'screening' ? 'recruiter screening' : level === 'senior' ? 'senior panel' : 'technical interview'} level.\n\nMix: 2 depth questions on requirements marked evidence (reference the candidate's actual projects or tools from the CV), 1–2 gap questions on requirements marked gap or partial (how they would approach it, where they would need support), 1 behavioural question from a responsibility in the JD, and optionally 1 scenario. Every question must be specific to this CV and JD; no generic "tell me about yourself".\n\nRequirements:\n${list}\n\n${wrap('jd', jd)}\n\n${wrap('cv', cv)}`,
+        tool: QUESTIONS_TOOL,
+        context: { cv, jd, requirements, level },
+        maxTokens: 3000,
+      });
+      return { ...validateQuestions(raw, { requirements }), meta: { provider: provider.name, model: provider.model, level } };
+    },
+
+    async gapQuestions({ cv, jd, requirement }) {
+      const raw = await provider.complete({
+        system: GROUNDING_RULES,
+        user: `The CV does not mention this requirement from the job description: "${requirement.name}". Source line from the advert: "${requirement.source || ''}".\n\nAsk the candidate 2–3 short, concrete questions to find out whether they have relevant experience, including with equivalent or adjacent tools. Do not assume they have it.\n\n${wrap('cv', cv)}`,
+        tool: GAP_QUESTIONS_TOOL,
+        context: { cv, jd, requirement },
+        maxTokens: 1200,
+      });
+      return { ...validateGapQuestions(raw), meta: { provider: provider.name, model: provider.model } };
+    },
+
+    async gapBullet({ cv, requirement, questions, answers, otherGaps }) {
+      const qa = questions.map((q, i) => `Q: ${q}\nA: ${answers[i] || '(no answer)'}`).join('\n\n');
+      const raw = await provider.complete({
+        system: GROUNDING_RULES,
+        user: `Requirement missing from the CV: "${requirement.name}".\n\nThe candidate answered these questions. Decide whether their answers show real experience. If supported or adjacent, draft ONE CV bullet using only facts, tools and numbers that appear in their answers or the CV. Never upgrade "I read about it" or "I'd like to learn" into experience. If unsupported, leave the bullet empty and offer a truthful learning_line instead.\n\n<answers>\n${qa}\n</answers>\n\n${wrap('cv', cv)}`,
+        tool: GAP_BULLET_TOOL,
+        context: { cv, requirement, questions, answers },
+        maxTokens: 1200,
+      });
+      return { ...validateGapBullet(raw, { cv, answers, requirement: requirement.name, otherGaps }), meta: { provider: provider.name, model: provider.model } };
     },
 
     async feedback({ question, answer, cv }) {

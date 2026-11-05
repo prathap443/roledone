@@ -1,5 +1,6 @@
 import { state, setDraft, requirements, currentDraft, save } from '../state.js';
-import { $, $$, esc, heading, empty, toast, busy, download, confirm } from '../ui.js';
+import { $, $$, esc, heading, empty, toast, busy, download, confirm, locked } from '../ui.js';
+import { can, needs } from '../plans.js';
 import * as api from '../api.js';
 
 export function render() {
@@ -8,6 +9,11 @@ export function render() {
       + empty('Bring your experience first', 'Add your CV in Role match to start a draft you can edit and export.', 'match', 'Add your CV');
   }
   const ai = api.aiAvailable();
+  if (!can('editor')) {
+    return heading('02 / SHAPE YOUR STORY', 'Good work. Clearly told.', 'Your source on the left. Your next draft on the right.')
+      + `<div class="two-col"><section class="panel editor-source"><h2>The original</h2><label class="field">Source CV<textarea class="editor-area" readonly>${esc(state.cv)}</textarea></label></section>
+<section class="panel">${locked({ plan: needs('editor'), title: 'Edit, improve and export your CV', body: `Apply ${ai ? api.providerLabel() + '’s' : ''} suggested rewrites line by line, add bullets from your Gap Interview, and export the result. Every change stays yours to accept.` })}</section></div>`;
+  }
   return heading('02 / SHAPE YOUR STORY', 'Good work. Clearly told.', 'Your source on the left. Your next draft on the right.') + `
 <div class="notice">${ai
     ? `${api.providerLabel()} can propose clearer wording for lines you already have. It is blocked from adding numbers, tools or claims that are not in your CV; anything it cannot support is shown as a question for you instead. You accept or dismiss every change.`

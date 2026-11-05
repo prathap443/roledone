@@ -61,3 +61,26 @@ test('validateFeedback normalises shape and never throws on garbage', () => {
   assert.deepEqual(fb.strengths, []);
   assert.deepEqual(fb.improvements, ['a', 'b']);
 });
+
+import { validateQuestions, validateGapBullet } from '../server/validate.mjs';
+test('validateQuestions keeps focus only when it names a real requirement', () => {
+  const { questions } = validateQuestions({ questions: [
+    { prompt: 'How did you tune the Synapse pipelines you built?', type: 'depth', focus: 'Azure Synapse', why: 'x', listen_for: ['a'] },
+    { prompt: 'short', type: 'depth', focus: '', why: '', listen_for: [] },
+    { prompt: 'Describe how you would adopt Terraform in a team new to IaC.', type: 'gap', focus: 'Pulumi', why: 'x', listen_for: [] },
+  ] }, { requirements: [{ name: 'Azure Synapse' }, { name: 'Terraform' }] });
+  assert.deepEqual(questions.map((q) => [q.id, q.focus]), [['q1', 'Azure Synapse'], ['q2', '']]);
+});
+
+test('validateGapBullet only lets the candidate’s own facts through', () => {
+  const base = { cv: sampleCV, requirement: 'Terraform', otherGaps: ['Terraform', 'CI/CD'] };
+  const answers = ['Yes, I wrote Terraform modules for our Databricks workspaces across 3 environments.'];
+  const ok = validateGapBullet({ verdict: 'supported', bullet: 'Provisioned Databricks workspaces across 3 environments with Terraform modules.', explanation: 'e', learning_line: '' }, { ...base, answers });
+  assert.equal(ok.verdict, 'supported'); assert.ok(ok.bullet);
+  const inflated = validateGapBullet({ verdict: 'supported', bullet: 'Provisioned 12 environments with Terraform.', explanation: 'e', learning_line: '' }, { ...base, answers });
+  assert.equal(inflated.verdict, 'unsupported'); assert.match(inflated.rejected, /12/);
+  const smuggled = validateGapBullet({ verdict: 'supported', bullet: 'Built Terraform modules deployed through CI/CD.', explanation: 'e', learning_line: '' }, { ...base, answers });
+  assert.match(smuggled.rejected, /ci\/cd/);
+  const none = validateGapBullet({ verdict: 'unsupported', bullet: 'Expert in Terraform.', explanation: 'e', learning_line: 'Currently learning Terraform.' }, { ...base, answers: ['No, never used it.'] });
+  assert.equal(none.bullet, ''); assert.equal(none.learning_line, 'Currently learning Terraform.');
+});

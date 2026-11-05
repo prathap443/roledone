@@ -38,3 +38,25 @@ export function questions(rows) {
   'Tell me about a disagreement with a stakeholder. What did you do, and what changed?'
  ];
 }
+
+/**
+ * Evidence Score: weighted coverage of the role's requirements by the CV.
+ * must-have = weight 1, nice-to-have = 0.5, responsibility = 0.75.
+ * evidence = 1, partial = 0.5, gap = 0. Returns null when there are no requirements.
+ * This is a transparent coverage measure, not an ATS score or a hiring prediction.
+ */
+export function evidenceScore(requirements) {
+ const weight = {must:1, nice:0.5, responsibility:0.75}, credit = {evidence:1, partial:0.5, gap:0};
+ let total=0, earned=0;
+ const counts = {evidence:0, partial:0, gap:0, must:0, mustEvidence:0};
+ for (const r of requirements || []) {
+  const status = r.status ?? (r.evidence ? 'evidence' : 'gap');
+  const w = weight[r.kind] ?? 1, c = credit[status] ?? 0;
+  total += w; earned += w*c; counts[status in credit ? status : 'gap']++;
+  if ((r.kind ?? 'must') === 'must') { counts.must++; if (status === 'evidence') counts.mustEvidence++; }
+ }
+ if (!total) return null;
+ const score = Math.round(100*earned/total);
+ const band = score >= 80 ? 'strong' : score >= 60 ? 'good' : score >= 40 ? 'developing' : 'early';
+ return {score, band, ...counts, total: (requirements||[]).length};
+}

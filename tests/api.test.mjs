@@ -97,3 +97,20 @@ test('anthropic adapter forces the tool and surfaces API errors with upstream st
   const limited = createAnthropicProvider({ apiKey: 'k', fetchImpl: async () => new Response('rate limited', { status: 429 }) });
   await assert.rejects(limited.complete({ system: 's', user: 'u', tool: { name: 't', input_schema: {} } }), (e) => e.status === 429);
 });
+
+test('questions and gap interview endpoints round-trip through the mock provider', async () => {
+  const { call, close } = await serve({ ai: createAI(createMockProvider()) });
+  try {
+    const match = await (await call('/api/match', { cv: sampleCV, jd: sampleJD })).json();
+    const qs = await (await call('/api/questions', { cv: sampleCV, jd: sampleJD, requirements: match.requirements, level: 'senior' })).json();
+    assert.equal(qs.questions.length, 5);
+    assert.ok(qs.questions.some((q) => q.type === 'gap' && q.focus === 'Terraform'));
+    const terraform = match.requirements.find((r) => r.name === 'Terraform');
+    const gq = await (await call('/api/gap-questions', { cv: sampleCV, jd: sampleJD, requirement: terraform })).json();
+    assert.ok(gq.questions.length >= 2);
+    const tooShort = await call('/api/gap-bullet', { cv: sampleCV, requirement: terraform, questions: gq.questions, answers: ['no'] });
+    assert.equal(tooShort.status, 400);
+    const bullet = await (await call('/api/gap-bullet', { cv: sampleCV, requirement: terraform, questions: gq.questions, answers: ['Yes, I wrote Terraform for the Synapse workspace in my last role.', ''], otherGaps: [{ name: 'CI/CD', status: 'gap' }] })).json();
+    assert.equal(bullet.verdict, 'supported'); assert.match(bullet.bullet, /Terraform/);
+  } finally { await close(); }
+});
