@@ -2,7 +2,7 @@
 // CV and JD text are untrusted input; they are wrapped in tags and the system prompt instructs
 // the model to treat them as data. Nothing leaves here without passing validate.mjs.
 
-import { validateMatch, validateSuggestions, validateFeedback, validateQuestions, validateGapQuestions, validateGapBullet } from './validate.mjs';
+import { validateMatch, validateSuggestions, validateFeedback, validateQuestions, validateGapQuestions, validateGapBullet, validateScanSummary } from './validate.mjs';
 
 const GROUNDING_RULES = `You are the analysis engine inside Rolewoven, a career studio for UK tech professionals.
 Non-negotiable rules:
@@ -134,6 +134,25 @@ const GAP_BULLET_TOOL = {
   },
 };
 
+const SCAN_TOOL = {
+  name: 'summarise_scan',
+  description: 'Summarise a CV scan for the candidate: what already works, and the few fixes that matter most.',
+  input_schema: {
+    type: 'object', required: ['headline', 'target_role', 'strengths', 'fixes'],
+    properties: {
+      headline: { type: 'string', description: 'One or two sentences, specific to this CV, in a calm professional voice. Max 200 chars.' },
+      target_role: { type: 'string', description: 'The role this CV appears to be aimed at, e.g. "Senior Azure Data Engineer".' },
+      strengths: { type: 'array', maxItems: 5, items: { type: 'object', required: ['text', 'evidence'], properties: {
+        text: { type: 'string', description: 'The strength in one sentence.' },
+        evidence: { type: 'string', description: 'Verbatim CV excerpt that shows it.' } } } },
+      fixes: { type: 'array', maxItems: 3, items: { type: 'object', required: ['text', 'why', 'evidence'], properties: {
+        text: { type: 'string', description: 'The fix as an instruction the candidate can act on. Never tell them to invent numbers; tell them which bullets need a real outcome added if they have one.' },
+        why: { type: 'string', description: 'Why it matters for a hiring manager or recruiter.' },
+        evidence: { type: ['string', 'null'], description: 'Verbatim CV excerpt the fix applies to, or null.' } } } },
+    },
+  },
+};
+
 export function createAI(provider) {
   return {
     provider,
@@ -199,6 +218,24 @@ export function createAI(provider) {
         maxTokens: 1200,
       });
       return { ...validateGapBullet(raw, { cv, answers, requirement: requirement.name, otherGaps }), meta: { provider: provider.name, model: provider.model } };
+    },
+
+    async scanSummary({ cv, scan }) {
+      const facts = [
+        `Overall ${scan.score}/100. Parse-ability ${scan.parts.parse.score}, Impact ${scan.parts.impact.score}, Readability ${scan.parts.readability.score}, Role coverage ${scan.parts.coverage.score} (${scan.parts.coverage.found.length} of ${scan.parts.coverage.total} ${scan.parts.coverage.role} requirements mentioned).`,
+        `Impact: ${scan.parts.impact.quantified} of ${scan.parts.impact.total} achievement lines carry a number; ${scan.parts.impact.weak} start weakly.`,
+        scan.parts.coverage.missing.length ? `Not mentioned: ${scan.parts.coverage.missing.slice(0, 8).join(', ')}.` : 'All curated requirements mentioned.',
+        scan.parts.readability.buzzwords.length ? `Buzzwords present: ${scan.parts.readability.buzzwords.join(', ')}.` : '',
+        scan.parts.parse.checks.filter((c) => !c.ok).map((c) => `Parse check failed: ${c.label}.`).join(' '),
+      ].filter(Boolean).join('\n');
+      const raw = await provider.complete({
+        system: GROUNDING_RULES,
+        user: `A deterministic scanner produced these facts about the CV. Write the human summary: a headline, up to five strengths each backed by a verbatim CV quote, and the three fixes that would most improve it. Base fixes on the facts and on what you can see in the CV. Do not restate the scores. Missing mentions may be missing evidence, not missing ability — phrase fixes as "if you have done X, show it", never as "add X".\n\n<facts>\n${facts}\n</facts>\n\n${wrap('cv', cv)}`,
+        tool: SCAN_TOOL,
+        context: { cv, scan },
+        maxTokens: 2500,
+      });
+      return { summary: validateScanSummary(raw, { cv }), meta: { provider: provider.name, model: provider.model } };
     },
 
     async feedback({ question, answer, cv }) {

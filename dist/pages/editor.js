@@ -86,8 +86,9 @@ export function bind({ rebind }) {
   bindCards();
 
   $('#suggest')?.addEventListener('click', async (e) => {
+    const button = e.currentTarget;
     if (!(await api.ensureConsent())) return;
-    await busy(e.currentTarget, 'Reading your draft…', async () => {
+    await busy(button, 'Reading your draft…', async () => {
       const result = await api.suggestions({ cv: state.cv, draft: draftArea.value, jd: state.jd, requirements: requirements() });
       state.suggestions = result.suggestions; state.dismissed = []; state.applied = []; save();
       refresh();

@@ -100,6 +100,12 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
       const otherGaps = reqList(body.otherGaps).map((r) => r.name);
       return send(res, 200, await ai.gapBullet({ cv, requirement, questions, answers, otherGaps }));
     }
+    if (pathname === '/api/scan-summary') {
+      const cv = text(body.cv, LIMITS.text, 'cv');
+      const scan = body.scan;
+      if (!scan || typeof scan.score !== 'number' || !scan.parts?.coverage) throw new HttpError(400, 'scan result is required');
+      return send(res, 200, await ai.scanSummary({ cv, scan }));
+    }
     if (pathname === '/api/feedback') {
       const question = text(body.question, LIMITS.question, 'question'), answer = text(body.answer, LIMITS.answer, 'answer'), cv = text(body.cv, LIMITS.text, 'cv', { required: false });
       if (answer.trim().split(/\s+/).length < 8) throw new HttpError(400, 'Write a few sentences before requesting a review.');

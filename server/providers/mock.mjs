@@ -73,6 +73,12 @@ export function createMockProvider() {
         if (/\b(no|never|not really|haven't|have not)\b/i.test(joined) && joined.length < 80) return { verdict: 'unsupported', bullet: '', explanation: 'Your answers do not describe hands-on experience.', learning_line: `Currently learning ${context.requirement.name}.` };
         return { verdict: 'supported', bullet: `Used ${context.requirement.name}: ${context.answers[0].trim()}`, explanation: 'Drafted from your first answer.', learning_line: '' };
       }
+      if (tool.name === 'summarise_scan') {
+        const ls = sentences(context.cv);
+        return { headline: 'Mock summary: clear technical depth; a few bullets need outcomes.', target_role: 'Data Engineer',
+          strengths: [{ text: 'Names the platforms actually used.', evidence: ls[1] || ls[0] }, { text: 'Fabricated evidence is dropped.', evidence: 'not in the cv' }],
+          fixes: [{ text: 'If a bullet had a measurable outcome, add it.', why: 'Numbers are what a hiring manager remembers.', evidence: ls[2] || null }] };
+      }
       throw new Error(`mock provider: unknown tool ${tool.name}`);
     },
   };
