@@ -157,7 +157,8 @@ export function createAI(provider) {
   return {
     provider,
     status() {
-      return provider ? { ai: true, provider: provider.name, model: provider.model } : { ai: false, provider: null, model: null };
+      const defaultPlan = ['free', 'pro', 'premium'].includes(process.env.ROLEWOVEN_DEFAULT_PLAN) ? process.env.ROLEWOVEN_DEFAULT_PLAN : 'free';
+      return provider ? { ai: true, provider: provider.name, model: provider.model, defaultPlan } : { ai: false, provider: null, model: null, defaultPlan };
     },
 
     async match({ cv, jd }) {

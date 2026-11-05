@@ -19,7 +19,7 @@ export const blank = () => ({
   suggestions: null,    // AI suggestions for the current draft, or null
   dismissed: [],
   applied: [],
-  plan: 'free',         // developer preview until accounts exist
+  plan: null,           // null = server default (ROLEWOVEN_DEFAULT_PLAN); developer preview until accounts exist
   questions: null,      // AI-written interview questions for this role
   questionLevel: 'technical',
   gaps: {},             // requirement id -> { questions, answers, result } from the Gap Interview

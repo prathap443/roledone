@@ -2,7 +2,7 @@
 // Until accounts exist the active plan lives in workspace state (developer preview only);
 // the server will enforce entitlements once authentication lands.
 
-import { state } from './state.js';
+import { state, session } from './state.js';
 
 export const PLANS = {
   free: { label: 'Free', price: '£0', blurb: 'See where you stand.' },
@@ -26,7 +26,7 @@ export const FEATURES = {
   exportDocx: 'premium',
 };
 
-export const plan = () => (RANK[state.plan] !== undefined ? state.plan : 'free');
+export const plan = () => (RANK[state.plan] !== undefined ? state.plan : RANK[session.ai?.defaultPlan] !== undefined ? session.ai.defaultPlan : 'free');
 export const can = (feature) => RANK[plan()] >= RANK[FEATURES[feature] || 'free'];
 export const needs = (feature) => PLANS[FEATURES[feature] || 'free'].label;
 

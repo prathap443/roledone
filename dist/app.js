@@ -85,11 +85,11 @@ $('#settings').onclick = () => {
 <p>Device saving stores CV text, drafts, answers, and applications in this browser’s local storage. This is not an encrypted document vault. Use a trusted device.</p>
 <label class="field"><span><input type="checkbox" id="remember" ${state.remember ? 'checked' : ''}> Save my workspace on this device</span></label>
 ${aiAvailable() ? `<label class="field"><span><input type="checkbox" id="consent" ${state.aiConsent ? 'checked' : ''}> Send text to ${esc(providerLabel())} without asking each time</span></label>` : ''}
-<label class="field inline">Plan (developer preview — not enforced until accounts exist)<select id="plan">${Object.entries(PLANS).map(([k, p]) => `<option value="${k}" ${plan() === k ? 'selected' : ''}>${p.label} · ${p.price}</option>`).join('')}</select></label>
+<label class="field inline">Plan (developer preview — not enforced until accounts exist)<select id="plan"><option value="" ${state.plan == null ? 'selected' : ''}>Server default (${PLANS[plan()].label})</option>${Object.entries(PLANS).map(([k, p]) => `<option value="${k}" ${state.plan === k ? 'selected' : ''}>${p.label} · ${p.price}</option>`).join('')}</select></label>
 <div class="actions"><button class="secondary" id="export-workspace">Export workspace</button><button class="secondary" id="clear-workspace">Clear all workspace data</button></div>`);
   $('#remember').onchange = (e) => { state.remember = e.target.checked; if (!state.remember) forget(); save(); toast(state.remember ? 'Device saving enabled.' : 'Device saving disabled.'); };
   $('#consent') && ($('#consent').onchange = (e) => { state.aiConsent = e.target.checked; save(); });
-  $('#plan').onchange = (e) => { state.plan = e.target.value; save(); render(); toast(`${PLANS[state.plan].label} plan (preview).`); };
+  $('#plan').onchange = (e) => { state.plan = e.target.value || null; save(); render(); toast(`${PLANS[plan()].label} plan (preview).`); };
   $('#export-workspace').onclick = () => download('rolewoven-workspace.json', JSON.stringify(state, null, 2), 'application/json');
   $('#clear-workspace').onclick = async () => {
     closeModal();
