@@ -7,13 +7,14 @@ import { $, $$, esc, toast, modal, closeModal, confirm, download } from './ui.js
 import { loadStatus, aiAvailable, providerLabel } from './api.js';
 import { PLANS, COMPARISON, plan } from './plans.js';
 import * as overview from './pages/overview.js';
+import * as scan from './pages/scan.js';
 import * as match from './pages/match.js';
 import * as editor from './pages/editor.js';
 import * as interview from './pages/interview.js';
 import * as applications from './pages/applications.js';
 
-const pages = { overview, match, editor, interview, applications };
-const names = { overview: 'Overview', match: 'Role match', editor: 'CV studio', interview: 'Interview room', applications: 'Applications' };
+const pages = { overview, scan, match, editor, interview, applications };
+const names = { overview: 'Overview', scan: 'CV scan', match: 'Role match', editor: 'CV studio', interview: 'Interview room', applications: 'Applications' };
 
 setStorageErrorHandler(() => toast('Storage is unavailable. Your work remains in this tab.'));
 load();

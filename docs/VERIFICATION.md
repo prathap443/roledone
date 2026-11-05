@@ -25,3 +25,9 @@ Not verified: real devices, all browser engines, file picker/import/export downl
 - 27 Node tests pass, including evidenceScore weighting, question validation, and Gap Interview grounding (inflated numbers and smuggled gap skills rejected; "no" answers yield no bullet).
 - Headless Chromium with the mock provider: free plan sees score card, gap-first list and locked gap/editor/interview states; plans dialog opens; switching to Pro enables the Gap Interview; adding a bullet raised the sample score 70 → 80 and appended the line to the draft; senior-level question set generated with 5 questions.
 - Sample-data button now appears only when both inputs are empty.
+
+# Verification — CV Scan report (branch `feat/cv-scan-report`)
+
+- 33 Node tests pass, including the four scanners on a strong and a weak CV, word-boundary coverage matching, and scan-summary validation (strengths without a real quote are dropped).
+- Headless Chromium with the mock provider: paste → report (score 68; tiles 92/64/42/100), impact tile shows weak openers, Claude's read renders quoted strengths, CV carries through to Role match, mobile layout at 390 px.
+- Fixed: AI buttons silently no-op'd when the consent dialog appeared (currentTarget read after await) — affected suggestions, questions, review and scan summary.

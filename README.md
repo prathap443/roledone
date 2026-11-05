@@ -40,6 +40,10 @@ npm test
 - **Gap Interview** — for each missing requirement, Claude asks two or three concrete questions; if the answers show real experience it drafts one bullet from the candidate's own words (numbers must come from the answers or CV; other missing skills cannot be smuggled in) and the user adds it to the draft. If not, it offers a truthful learning-goal line. Nothing is ever added without the user's own account of it.
 - **Generated interview questions** — five questions written from the requirements and the CV at recruiter-screen, technical or senior-panel level, with "listen for" notes revealed after review.
 
+### CV Scan (free)
+
+Upload or paste a CV with no job description and get a 0–100 CV score with four explainable sub-scores computed in the browser (`dist/scan.js`): **Parse-ability** (contact details, standard headings, dates, bullets, length, single-column flow), **Impact** (share of achievement lines with a measurable outcome and a strong verb, minus weak openers), **Readability** (long sentences, passive voice, buzzwords) and **Role coverage** (mentions of a curated set of common requirements for the role family; Senior Data Engineer first). Each tile opens the rules and the CV lines behind the number. Claude writes the headline, strengths (each backed by a verbatim CV quote) and the three critical fixes; fixes are phrased "if you did this, show it", never "add this". Download as PDF via print.
+
 ### Plans (developer preview)
 
 Free: scan, Evidence Score, and the full list of what is missing. Pro: suggestions, Gap Interview, CV studio and export, generated questions and answer review. Premium: follow-ups, multiple CV versions, DOCX/PDF export (not built yet). The active plan is a workspace setting for now; entitlement enforcement arrives with accounts and payments.

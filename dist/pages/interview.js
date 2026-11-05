@@ -73,8 +73,9 @@ export function bind({ render: rerender }) {
   $('#level')?.addEventListener('change', (e) => { state.questionLevel = e.target.value; save(); });
 
   $('#generate')?.addEventListener('click', async (e) => {
+    const button = e.currentTarget;
     if (!(await api.ensureConsent())) return;
-    await busy(e.currentTarget, 'Writing questions…', async () => {
+    await busy(button, 'Writing questions…', async () => {
       const result = await api.questions({ cv: state.cv, jd: state.jd, requirements: requirements(), level: state.questionLevel });
       if (!result.questions.length) { toast('No questions came back. Try again.'); return; }
       state.questions = result.questions; state.answers = {}; state.feedback = {}; session.question = 0; save();
@@ -84,11 +85,12 @@ export function bind({ render: rerender }) {
   });
 
   $('#review')?.addEventListener('click', async (e) => {
+    const button = e.currentTarget;
     const answer = $('#answer').value;
     const show = (fb) => { state.feedback[q] = fb; save(); $('#feedback').innerHTML = renderFeedback(fb, qs[q]); };
     if (!api.aiAvailable() || answer.trim().split(/\s+/).length < 8) { show({ kind: 'heuristic', tips: heuristic(answer) }); return; }
     if (!(await api.ensureConsent())) return;
-    await busy(e.currentTarget, 'Reviewing…', async () => {
+    await busy(button, 'Reviewing…', async () => {
       const result = await api.feedback({ question: qs[q].prompt, answer, cv: state.cv });
       show({ kind: 'ai', feedback: result.feedback });
     });

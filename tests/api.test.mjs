@@ -117,3 +117,15 @@ test('questions and gap interview endpoints round-trip through the mock provider
     assert.equal(bullet.verdict, 'supported'); assert.match(bullet.bullet, /Terraform/);
   } finally { await close(); }
 });
+
+test('scan summary endpoint drops strengths without a real CV quote', async () => {
+  const { scanCV } = await import('../dist/scan.js');
+  const { call, close } = await serve({ ai: createAI(createMockProvider()) });
+  try {
+    assert.equal((await call('/api/scan-summary', { cv: sampleCV })).status, 400);
+    const res = await (await call('/api/scan-summary', { cv: sampleCV, scan: scanCV(sampleCV) })).json();
+    assert.equal(res.summary.strengths.length, 1);
+    assert.ok(sampleCV.includes(res.summary.strengths[0].evidence));
+    assert.equal(res.summary.fixes.length, 1);
+  } finally { await close(); }
+});

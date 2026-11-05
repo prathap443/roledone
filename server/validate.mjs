@@ -185,3 +185,11 @@ export function validateGapBullet(raw, { cv, answers, requirement, otherGaps = [
   result.bullet = bullet;
   return result;
 }
+
+/** Scan summary: strengths must quote the CV; fixes are advice and carry an optional quote. */
+export function validateScanSummary(raw, { cv }) {
+  const item = (x) => ({ text: asText(x?.text, LIMITS.note), evidence: x?.evidence ? locateSpan(asText(x.evidence, 400), cv) : null });
+  const strengths = (Array.isArray(raw?.strengths) ? raw.strengths : []).map(item).filter((x) => x.text && x.evidence).slice(0, 5);
+  const fixes = (Array.isArray(raw?.fixes) ? raw.fixes : []).map((x) => ({ ...item(x), why: asText(x?.why, LIMITS.note) })).filter((x) => x.text).slice(0, 3);
+  return { headline: asText(raw?.headline, 220), strengths, fixes, target_role: asText(raw?.target_role, 80) };
+}
