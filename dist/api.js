@@ -21,14 +21,16 @@ export async function loadStatus() {
 }
 
 export const aiAvailable = () => Boolean(session.ai?.ai);
-export const providerLabel = () => (session.ai?.provider === 'anthropic' ? 'Claude' : session.ai?.provider === 'mock' ? 'mock provider' : 'AI');
+export const providerLabel = () => (session.ai?.provider === 'anthropic' ? 'AI agent' : session.ai?.provider === 'mock' ? 'mock provider' : 'AI');
+/** Named processor for the consent dialog — users should know who handles their text. */
+export const processorName = () => (session.ai?.provider === 'anthropic' ? 'Anthropic Claude' : providerLabel());
 
 /** Ask once per workspace before sending CV text to the server. Resolves false if declined. */
 export function ensureConsent() {
   if (state.aiConsent) return Promise.resolve(true);
   return new Promise((resolve) => {
     modal(`<div class="eyebrow">BEFORE WE CONTINUE</div><h2>Send your text for analysis?</h2>
-<p>Your CV and job description text will be sent to the Rolewoven server and processed by ${providerLabel()} to produce this result. Rolewoven does not store your documents; the AI provider processes them under its API terms.</p>
+<p>Your CV and job description text will be sent to the Rolewoven server and processed by ${processorName()} to produce this result. Rolewoven does not store your documents; the AI provider processes them under its API terms.</p>
 <p>Review every suggestion. The AI can only quote and rephrase what you wrote — it is blocked from adding numbers, tools or claims that are not already in your CV.</p>
 <label class="field"><span><input type="checkbox" id="consent-remember" checked> Don’t ask again in this workspace</span></label>
 <div class="actions"><button class="primary" id="consent-yes">Continue</button><button class="secondary" id="consent-no">Not now</button></div>`);

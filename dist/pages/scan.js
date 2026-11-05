@@ -9,7 +9,7 @@ const BANDS = { exceptional: ['Exceptional', 'This CV already does most of the w
 const grade = (n) => (n >= 85 ? ['Excellent', 'good'] : n >= 70 ? ['Strong', 'good'] : n >= 50 ? ['Needs work', 'warn'] : ['Weak', 'bad']);
 
 export function render() {
-  const intro = heading('00 / START HERE', 'How does your CV read?', 'Upload or paste it. Four checks run in your browser; Claude writes the summary.');
+  const intro = heading('00 / START HERE', 'How does your CV read?', 'Upload or paste it. Four checks run in your browser; the AI agent adds its first observations.');
   if (!state.cv) return intro + uploadForm();
   const scan = state.scan || scanCV(state.cv);
   return intro + report(scan) + `<p class="hint centre"><button class="text-button" id="rescan-new">Scan a different CV ↗</button></p>`;
@@ -40,7 +40,7 @@ function report(scan) {
   <h2>${s?.headline ? esc(s.headline) : bandCopy}</h2>
   <p>${s?.target_role ? `Reads as a <strong>${esc(s.target_role)}</strong> CV. ` : ''}${scan.words} words · scored against ${p.coverage.total} common ${esc(p.coverage.role)} requirements.</p>
   <div class="actions">
-   ${api.aiAvailable() && !s ? `<button class="primary lime" id="summarise">Get Claude’s read ✧</button>` : ''}
+   ${api.aiAvailable() && !s ? `<button class="primary lime" id="summarise">AI agent · first observations ✧</button>` : ''}
    <button class="secondary" data-page="match">Compare to a job description →</button>
    <button class="secondary" id="print">Download PDF ↓</button>
   </div>
@@ -58,7 +58,7 @@ function report(scan) {
 <div id="tile-detail">${session.tile ? detail(scan, session.tile) : ''}</div>
 
 <div class="two-col scan-lists">
- <section class="panel good-list"><h2>✓ What already works</h2>${s ? (s.strengths.length ? `<ul>${s.strengths.map((x) => `<li>${esc(x.text)}<q>${esc(x.evidence)}</q></li>`).join('')}</ul>` : '<p class="hint">Claude found nothing it could back with a quote.</p>') : localStrengths(scan)}</section>
+ <section class="panel good-list"><h2>✓ What already works</h2>${s ? (s.strengths.length ? `<ul>${s.strengths.map((x) => `<li>${esc(x.text)}<q>${esc(x.evidence)}</q></li>`).join('')}</ul>` : '<p class="hint">The AI agent found nothing it could back with a quote.</p>') : localStrengths(scan)}</section>
  <section class="panel fix-list"><h2>! Critical fixes</h2>${s ? `<ol>${s.fixes.map((x) => `<li><strong>${esc(x.text)}</strong><p>${esc(x.why)}</p>${x.evidence ? `<q>${esc(x.evidence)}</q>` : ''}</li>`).join('')}</ol>` : localFixes(scan)}</section>
 </div>
 
@@ -66,7 +66,7 @@ function report(scan) {
  <div><div class="eyebrow">NEXT STEPS</div><h3>Turn the score into a stronger CV.</h3></div>
  <div class="actions">
   <button class="primary" data-page="match">Compare to a job description →</button>
-  ${can('suggestions') ? '<button class="secondary" data-page="editor">Fix these in CV studio ✧</button>' : `<button class="secondary" data-upgrade>Fix these with Claude · ${esc(needs('suggestions'))}</button>`}
+  ${can('suggestions') ? '<button class="secondary" data-page="editor">Fix these in CV studio ✧</button>' : `<button class="secondary" data-upgrade>Fix these with the AI agent · ${esc(needs('suggestions'))}</button>`}
  </div>
 </section>`;
 }
@@ -78,7 +78,7 @@ function localStrengths(scan) {
   if (p.impact.quantified >= p.impact.total * 0.5 && p.impact.total) items.push(`${p.impact.quantified} achievement lines carry a measurable outcome.`);
   if (p.parse.score >= 80) items.push('Standard structure: parsers and recruiters will find the sections they expect.');
   if (!p.readability.buzzwords.length) items.push('No empty buzzwords.');
-  return items.length ? `<ul>${items.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="hint">Run Claude’s read for strengths backed by quotes from your CV.</p>';
+  return items.length ? `<ul>${items.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="hint">Ask the AI agent for first observations backed by quotes from your CV.</p>';
 }
 
 function localFixes(scan) {
