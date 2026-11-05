@@ -1,73 +1,96 @@
-import { sampleCV, sampleJD, analyse, questions, feedback } from './core.js';
-import { extractCV } from './import-cv.js';
-const $ = s=>document.querySelector(s);
-const esc = s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const key='rolewoven-v1';
-let state={cv:'',jd:'',draft:null,answers:{},applications:[],remember:false};
-try{const saved=JSON.parse(localStorage.getItem(key)||'null');if(saved && typeof saved.cv==='string' && typeof saved.jd==='string' && Array.isArray(saved.applications)) state={...state,...saved};}catch{}
-let page='overview',question=0,rows=[],isSample=false;
-const names={overview:'Overview',match:'Role match',editor:'CV studio',interview:'Interview room',applications:'Applications'};
-function save(){if(state.remember){try{localStorage.setItem(key,JSON.stringify(state));}catch{toast('Storage is unavailable. Your work remains in this tab.');}}}
-let toastTimer;
-function toast(message){$('#toast').textContent=message;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),3500);}
-function modal(html){$('#dialog-content').innerHTML=html;$('#dialog').showModal();}
-function heading(eyebrow,title,description,action=''){return `<div class="page-heading"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p>${description}</p></div>${action}</div>`;}
-function navigate(next){page=names[next]?next:'overview';location.hash=page;render();window.scrollTo(0,0);}
-function render(){
- rows=analyse(state.cv,state.jd);
- $('#breadcrumb').innerHTML=`Workspace <b>/ ${names[page]}</b>`;
- document.querySelectorAll('nav button').forEach(b=>{b.classList.toggle('active',b.dataset.page===page);if(b.dataset.page===page)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
- $('#main').innerHTML=({overview,match,editor,interview,applications}[page])();
- bind();
-}
-function overview(){const evidence=rows.filter(r=>r.evidence).length,practised=Object.values(state.answers).filter(a=>a.trim()).length;
-return heading('MAKE YOUR NEXT MOVE COUNT','Your next chapter starts here.','A little clarity. A stronger story. A role that fits.',`<button class="primary" data-page="match">Start a role match <span>↗</span></button>`)+`
-<section class="hero"><div class="hero-copy"><div class="eyebrow">GOOD WORK DESERVES TO BE SEEN</div><h2>You have the experience.<br>Let’s find <em>the words.</em></h2><p>Connect what you’ve done with where you want to go. One thoughtful application at a time.</p><button class="primary lime" id="demo">Explore a sample journey <span>↗</span></button></div><div class="orbit" aria-hidden="true"><div class="orbit-ring"></div><div class="orbit-ring"></div><div class="orbit-ring"></div><div class="orbit-ring"></div><div class="orbit-core">↗</div><div class="orbit-chip chip-one"><span>✓</span> Your experience</div><div class="orbit-chip chip-two"><span>◎</span> Your next role</div><div class="orbit-chip chip-three"><span>✧</span> A story only you can tell</div></div></section>
-<section class="metrics" aria-label="Your progress"><div class="metric"><div class="metric-top"><span>Skills with CV mentions</span><span>◎</span></div><strong>${evidence.toString().padStart(2,'0')}</strong><small>${rows.length?'of '+rows.length+' recognised requirements':'Start with a role match'}</small></div><div class="metric"><div class="metric-top"><span>Answers practised</span><span>◌</span></div><strong>${practised.toString().padStart(2,'0')}</strong><small>Your interview preparation</small></div><div class="metric"><div class="metric-top"><span>Applications tracked</span><span>↗</span></div><strong>${state.applications.length.toString().padStart(2,'0')}</strong><small>Your next opportunities</small></div></section>
-<div class="lower-grid"><section><div class="section-heading"><h2>A clearer path forward</h2><span>YOUR NEXT STEPS</span></div><div class="panel"><div class="journey-row"><span class="step-no">01</span><div><h3>Find the connection</h3><p>Compare your experience with a real job description.</p></div><button data-page="match" aria-label="Open role match">↗</button></div><div class="journey-row"><span class="step-no">02</span><div><h3>Make your story stronger</h3><p>Shape your CV, keeping every claim yours.</p></div><button data-page="editor" aria-label="Open CV studio">↗</button></div><div class="journey-row"><span class="step-no">03</span><div><h3>Walk in with preparation</h3><p>Practise the questions behind the job description.</p></div><button data-page="interview" aria-label="Open interview room">↗</button></div></div></section><section><div class="section-heading"><h2>A thought for your next move</h2><span>THE CAREER NOTE</span></div><div class="panel insight"><span class="small-caps">LESS POLISH. MORE PROOF.</span><h3>The strongest thing on your CV is something you actually did.</h3><p>Start with the problem. Show your contribution. Finish with an outcome you can explain.</p><button class="text-button" data-page="editor">Bring your experience into focus ↗</button></div></section></div><div class="bottom-note">◇ Your CV stays in this tab unless you choose to save it on this device. No AI requests are sent.</div>`;}
-function match(){return heading('01 / FIND THE CONNECTION','Meet your next opportunity.','Bring your experience and a role together. See where the evidence is.')+`
-<div class="notice">Prototype matching checks a small, fixed skill vocabulary. A mention is not verified proficiency, an ATS score, or a prediction of hiring outcomes.</div>
-<form id="match-form"><div class="two-col"><section class="panel"><h2>Your experience</h2><label class="field">CV text<textarea id="cv" required maxlength="50000" placeholder="Paste your CV here…">${esc(state.cv)}</textarea></label><label class="file-label">Upload your CV <input type="file" id="cv-file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" aria-describedby="upload-help upload-status"></label><p class="hint" id="upload-help">PDF, Word (.docx), or TXT · up to 10 MB. Read privately in your browser. Review the extracted text before matching.</p><p class="hint" id="upload-status" role="status" aria-live="polite"></p></section><section class="panel"><h2>The opportunity</h2><label class="field">Job description<textarea id="jd" required maxlength="50000" placeholder="Paste the job description here…">${esc(state.jd)}</textarea></label><p class="hint">Include the technical requirements and responsibilities. Review the original advert for requirements this prototype may miss.</p><div class="actions"><button class="primary" type="submit">Find the connections ↗</button><button class="secondary" type="button" id="sample">Use sample data</button></div></section></div></form><div id="results" class="results">${state.cv&&state.jd?results():''}</div>`;}
-function results(){const count=rows.filter(r=>r.evidence).length;return `<section class="panel"><div class="section-heading"><h2>${count} of ${rows.length} recognised skills mentioned</h2><span>${isSample?'SAMPLE DATA':'TEXT COMPARISON'}</span></div><p class="hint">${rows.length?'Check the context of every match. Missing mentions may mean missing evidence, not missing ability.':'No supported skill terms found. Try a more detailed technical job description; no score can be inferred.'}</p>${rows.map(r=>`<div class="evidence-row"><div class="evidence-top"><h3>${esc(r.name)}</h3><span class="pill ${r.evidence?'':'gap'}">${r.evidence?'Mention found':'Evidence to clarify'}</span></div><p>${r.evidence?'“'+esc(r.evidence)+'”':'Not found in your CV text. Add an example only if you have this experience, or make it a learning goal.'}</p></div>`).join('')}<div class="actions"><button class="primary" data-page="editor">Continue to CV studio ↗</button><button class="secondary" data-page="interview">Practise for this role</button></div></section>`;}
-function editor(){if(!state.cv)return heading('02 / SHAPE YOUR STORY','Good work. Clearly told.','Your experience is the source of truth.')+empty('Bring your experience first','Add your CV in Role match to start a draft you can edit and export.','match','Add your CV');return heading('02 / SHAPE YOUR STORY','Good work. Clearly told.','Your source on the left. Your next draft on the right.')+`<div class="notice">This is a manual editing studio with writing prompts. AI rewriting is not connected. Keep every claim accurate and add numbers only when you can support them.</div><div class="two-col"><section class="panel editor-source"><h2>The original</h2><label class="field">Source CV<textarea class="editor-area" readonly>${esc(state.cv)}</textarea></label><h3>A stronger bullet starts with a question</h3><ul class="rule-list"><li>What did you build, change, or own?</li><li>Which tools did you actually use?</li><li>Who benefited, and what changed?</li><li>Can you explain the result in an interview?</li></ul></section><section class="panel"><h2>Your next version <span class="tag">YOU’RE THE EDITOR</span></h2><label class="field">Editable CV draft<textarea id="draft" class="editor-area" maxlength="50000">${esc(state.draft??state.cv)}</textarea></label><div class="actions"><button class="primary" id="export">Export CV · TXT ↓</button><button class="secondary" id="reset-draft">Restore original</button></div><p class="hint">Changes are kept in this tab. Device saving is optional in workspace settings.</p></section></div>`;}
-function empty(title,description,target,label){return `<div class="panel empty"><div class="empty-icon">◎</div><h2>${title}</h2><p>${description}</p><button class="primary" data-page="${target}">${label} ↗</button></div>`;}
-function interview(){if(!state.cv||!state.jd)return heading('03 / GET READY','Your interview starts here.','Practise explaining your work, one question at a time.')+empty('Make it relevant to you','Add a CV and job description to build a five-question practice session.','match','Match a role');const qs=questions(rows);return heading('03 / GET READY','Preparation, without the pressure.','Five questions shaped by the skill mentions in your role match.')+`<div class="notice">Practice mode: questions use templates and feedback uses a structure checklist. Technical accuracy, confidence, and hiring readiness are not assessed.</div><section class="panel"><div class="question-dots" aria-label="Choose a question">${qs.map((_,i)=>`<button data-question="${i}" class="${i===question?'selected':''}" aria-label="Question ${i+1}" ${i===question?'aria-current="step"':''}>${i+1}</button>`).join('')}</div><span class="question-number">QUESTION 0${question+1} / 05</span><h2 class="question-title">${esc(qs[question])}</h2><label class="field">Your practice answer<textarea id="answer" maxlength="20000" placeholder="Set the scene. Explain your action. Share the outcome…">${esc(state.answers[question]||'')}</textarea><small>Use a real example. It is fine to explain where your experience ends.</small></label><div class="actions"><button class="primary" id="review">Review answer structure ✧</button><button class="secondary" id="next-question">${question===4?'Back to first question':'Next question'} →</button></div><div id="feedback"></div></section>`;}
-function applications(){return heading('04 / LEARN AS YOU GO','Every application is a next step.','Track what happened. Look for patterns without guessing why.')+`<section class="panel"><h2>Add an opportunity</h2><form id="application-form"><div class="two-col"><label class="field">Role title<input id="role" required maxlength="120" placeholder="Senior Data Engineer"></label><label class="field">Company<input id="company" required maxlength="120" placeholder="Company name"></label></div><button class="primary" type="submit">Add application +</button></form></section><section class="panel results"><div class="section-heading"><h2>Your opportunities</h2><span>${state.applications.length} TRACKED</span></div>${state.applications.length?state.applications.map(a=>`<article class="application"><div><h3>${esc(a.role)}</h3><p>${esc(a.company)} · Added ${esc(a.date)}</p></div><label><span class="hint">Status</span><select data-status="${esc(a.id)}" aria-label="Application status for ${esc(a.role)}">${['Preparing','Applied','Interview','Offer','Closed'].map(s=>`<option ${a.status===s?'selected':''}>${s}</option>`).join('')}</select></label><button data-delete="${esc(a.id)}" aria-label="Delete application for ${esc(a.role)}">×</button></article>`).join(''):`<div class="empty"><div class="empty-icon">↗</div><h3>Your next chapter is unwritten.</h3><p>Add your first opportunity above. No invented activity, just your progress.</p></div>`}</section><p class="hint">Statuses are self-reported. Application outcomes alone cannot explain rejection causes.</p>`;}
-function bind(){
- document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>navigate(b.dataset.page));
- $('#demo')?.addEventListener('click',()=>loadSample());$('#sample')?.addEventListener('click',()=>loadSample());
- $('#match-form')?.addEventListener('submit',e=>{e.preventDefault();const cv=$('#cv').value.trim(),jd=$('#jd').value.trim();if(!cv||!jd){toast('Add both your CV and the job description.');return;}if(state.cv!==cv||state.jd!==jd){state.answers={};state.draft=null;}state.cv=cv;state.jd=jd;save();rows=analyse(cv,jd);$('#results').innerHTML=results();bindResultLinks();$('#results').scrollIntoView({behavior:'smooth',block:'start'});});
- $('#cv-file')?.addEventListener('change',async e=>{
-  const input=e.target,file=input.files[0];if(!file)return;
-  const area=$('#cv'),status=$('#upload-status'),submit=$('#match-form button[type="submit"]');
-  input.disabled=true;area.readOnly=true;submit.disabled=true;status.textContent='Reading '+file.name+'…';status.setAttribute('aria-busy','true');
-  try{
-   const text=await extractCV(file);
-   if(!input.isConnected)return;
-   area.value=text;state.cv=text;state.draft=null;state.answers={};state.jd=$('#jd').value;isSample=false;save();
-   $('#results').innerHTML='';status.textContent=file.name+' loaded. Review the text above, then find the connections.';
-  }catch(error){if(input.isConnected){status.textContent=error.message;toast(error.message);}}
-  finally{input.disabled=false;area.readOnly=false;submit.disabled=false;status.removeAttribute('aria-busy');input.value='';}
- });
- $('#draft')?.addEventListener('input',e=>{state.draft=e.target.value;save();});
- $('#export')?.addEventListener('click',()=>download('rolewoven-cv.txt',$('#draft').value,'text/plain'));
- $('#reset-draft')?.addEventListener('click',()=>{modal('<h2>Restore the original CV?</h2><p>This replaces your edited draft. Export it first if you want to keep a copy.</p><button class="primary" id="confirm-reset">Restore original</button>');$('#confirm-reset').onclick=()=>{state.draft=state.cv;save();$('#dialog').close();render();};});
- document.querySelectorAll('[data-question]').forEach(b=>b.onclick=()=>{question=Number(b.dataset.question);render();});
- $('#answer')?.addEventListener('input',e=>{state.answers[question]=e.target.value;save();});
- $('#review')?.addEventListener('click',()=>{$('#feedback').innerHTML=`<div class="feedback"><strong>Structure check</strong><ul>${feedback($('#answer').value).map(t=>`<li>${esc(t)}</li>`).join('')}</ul></div>`;});
- $('#next-question')?.addEventListener('click',()=>{question=(question+1)%5;render();});
- $('#application-form')?.addEventListener('submit',e=>{e.preventDefault();const role=$('#role').value.trim(),company=$('#company').value.trim();if(!role||!company){toast('Enter a role and company.');return;}state.applications.unshift({id:crypto.randomUUID(),role,company,status:'Preparing',date:new Date().toLocaleDateString('en-GB')});save();render();toast('Opportunity added.');});
- document.querySelectorAll('[data-status]').forEach(s=>s.onchange=()=>{state.applications.find(a=>a.id===s.dataset.status).status=s.value;save();toast('Status updated.');});
- document.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>{modal('<h2>Remove this opportunity?</h2><p>This deletes the record from your workspace.</p><button class="primary" id="confirm-delete">Remove opportunity</button>');$('#confirm-delete').onclick=()=>{state.applications=state.applications.filter(a=>a.id!==b.dataset.delete);save();$('#dialog').close();render();};});
-}
-function bindResultLinks(){document.querySelectorAll('#results [data-page]').forEach(b=>b.onclick=()=>navigate(b.dataset.page));}
-function loadSample(){if(state.cv||state.jd){modal('<h2>Load the sample journey?</h2><p>This replaces your current CV, job description, draft, and practice answers. Tracked applications stay in place.</p><button class="primary" id="confirm-sample">Load sample</button>');$('#confirm-sample').onclick=()=>{$('#dialog').close();setSample();};}else setSample();}
-function setSample(){state.cv=sampleCV;state.jd=sampleJD;state.draft=null;state.answers={};question=0;isSample=true;save();navigate('match');toast('Fictional sample loaded. Try the comparison.');}
-function download(name,text,type){const url=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Download prepared.');}
-$('#help').onclick=()=>modal('<div class="eyebrow">ROLEWOVEN / EARLY PROTOTYPE</div><h2>Real experience. A clearer story.</h2><p>Explore role matching, edit your CV, practise interview answers, and track applications. Matching and feedback run locally with simple rules. No AI service is connected.</p><p>Import PDF, DOCX, or TXT files up to 10 MB; export edited CVs as TXT. Scanned PDFs need OCR first. Accounts, billing, and AI coaching are planned next.</p><p>Your content stays in this tab unless you enable device saving. Closing or refreshing the tab otherwise clears it.</p>');
-$('#settings').onclick=()=>{modal(`<h2>Your workspace, your choice.</h2><p>Device saving stores CV text, drafts, answers, and applications in this browser’s local storage. This is not an encrypted document vault. Use a trusted device.</p><label class="field"><span><input type="checkbox" id="remember" ${state.remember?'checked':''}> Save my workspace on this device</span></label><div class="actions"><button class="secondary" id="export-workspace">Export workspace</button><button class="secondary" id="clear-workspace">Clear all workspace data</button></div>`);$('#remember').onchange=e=>{state.remember=e.target.checked;if(!state.remember){try{localStorage.removeItem(key);}catch{}}save();toast(state.remember?'Device saving enabled.':'Device saving disabled.');};$('#export-workspace').onclick=()=>download('rolewoven-workspace.json',JSON.stringify(state,null,2),'application/json');$('#clear-workspace').onclick=()=>{modal('<h2>Clear all workspace data?</h2><p>This removes the CV, draft, practice answers, and application records from this tab and this browser’s saved workspace. Export a copy first if needed.</p><button class="primary" id="confirm-clear">Clear everything</button>');$('#confirm-clear').onclick=()=>{try{localStorage.removeItem(key);}catch{}state={cv:'',jd:'',draft:null,answers:{},applications:[],remember:false};isSample=false;question=0;$('#dialog').close();navigate('overview');toast('Workspace cleared.');};};};
-window.addEventListener('hashchange',()=>{const next=location.hash.slice(1);if(next!==page){page=names[next]?next:'overview';render();}});
-page=names[location.hash.slice(1)]?location.hash.slice(1):'overview';render();
+// Rolewoven app shell: routing, navigation, workspace settings, and the AI status indicator.
+// Pages live in ./pages/*.js; shared state in ./state.js; server calls in ./api.js.
 
+import { sampleCV, sampleJD } from './core.js';
+import { state, session, load, save, reset, forget, setSources, setStorageErrorHandler } from './state.js';
+import { $, $$, esc, toast, modal, closeModal, confirm, download } from './ui.js';
+import { loadStatus, aiAvailable, providerLabel } from './api.js';
+import * as overview from './pages/overview.js';
+import * as match from './pages/match.js';
+import * as editor from './pages/editor.js';
+import * as interview from './pages/interview.js';
+import * as applications from './pages/applications.js';
 
-$('#mobile-settings').onclick=()=>$('#settings').click();
+const pages = { overview, match, editor, interview, applications };
+const names = { overview: 'Overview', match: 'Role match', editor: 'CV studio', interview: 'Interview room', applications: 'Applications' };
+
+setStorageErrorHandler(() => toast('Storage is unavailable. Your work remains in this tab.'));
+load();
+
+function navigate(next) {
+  session.page = names[next] ? next : 'overview';
+  location.hash = session.page;
+  render();
+  window.scrollTo(0, 0);
+}
+
+/** Attach page-navigation handlers to any [data-page] buttons inside `root`. */
+function rebind(root = document) {
+  const scope = typeof root === 'string' ? $(root) : root;
+  $$('[data-page]', scope).forEach((b) => (b.onclick = () => navigate(b.dataset.page)));
+}
+
+function render() {
+  $('#breadcrumb').innerHTML = `Workspace <b>/ ${names[session.page]}</b>`;
+  $$('nav button').forEach((b) => {
+    const active = b.dataset.page === session.page;
+    b.classList.toggle('active', active);
+    if (active) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
+  $('#main').innerHTML = pages[session.page].render();
+  rebind();
+  pages[session.page].bind({ loadSample, rebind, render });
+}
+
+function renderStatus() {
+  const dot = $('.status-dot'), label = $('.top-status');
+  dot.classList.toggle('on', aiAvailable());
+  label.textContent = aiAvailable() ? `${providerLabel()} connected` : 'Browser-only prototype';
+  label.title = aiAvailable() ? `AI analysis via ${session.ai.provider} (${session.ai.model}). Text is only sent when you ask.` : 'No AI provider configured on this server.';
+  $('.profile small').textContent = aiAvailable() ? 'AI-assisted workspace' : 'Local prototype';
+}
+
+async function loadSample() {
+  if (state.cv || state.jd) {
+    const ok = await confirm({ title: 'Load the sample journey?', body: 'This replaces your current CV, job description, draft, and practice answers. Tracked applications stay in place.', action: 'Load sample' });
+    if (!ok) return;
+  }
+  setSources({ cv: sampleCV, jd: sampleJD });
+  session.isSample = true;
+  navigate('match');
+  toast('Fictional sample loaded. Try the comparison.');
+}
+
+$('#help').onclick = () => modal(`<div class="eyebrow">ROLEWOVEN / EARLY ACCESS</div><h2>Real experience. A clearer story.</h2>
+<p>Match a role, edit your CV, practise interview answers, and track applications.</p>
+<p>${aiAvailable()
+    ? `AI analysis is provided by ${esc(providerLabel())}. It reads your text only when you press an AI button, must quote your own CV for every claim, and is blocked from inventing numbers, tools, or achievements. Rolewoven does not store your documents.`
+    : 'No AI provider is configured on this server, so matching and feedback use simple local rules.'}</p>
+<p>Import PDF, DOCX, or TXT files up to 10 MB; export edited CVs as TXT. Scanned PDFs need OCR first. Your content stays in this tab unless you enable device saving.</p>`);
+
+$('#settings').onclick = () => {
+  modal(`<h2>Your workspace, your choice.</h2>
+<p>Device saving stores CV text, drafts, answers, and applications in this browser’s local storage. This is not an encrypted document vault. Use a trusted device.</p>
+<label class="field"><span><input type="checkbox" id="remember" ${state.remember ? 'checked' : ''}> Save my workspace on this device</span></label>
+${aiAvailable() ? `<label class="field"><span><input type="checkbox" id="consent" ${state.aiConsent ? 'checked' : ''}> Send text to ${esc(providerLabel())} without asking each time</span></label>` : ''}
+<div class="actions"><button class="secondary" id="export-workspace">Export workspace</button><button class="secondary" id="clear-workspace">Clear all workspace data</button></div>`);
+  $('#remember').onchange = (e) => { state.remember = e.target.checked; if (!state.remember) forget(); save(); toast(state.remember ? 'Device saving enabled.' : 'Device saving disabled.'); };
+  $('#consent') && ($('#consent').onchange = (e) => { state.aiConsent = e.target.checked; save(); });
+  $('#export-workspace').onclick = () => download('rolewoven-workspace.json', JSON.stringify(state, null, 2), 'application/json');
+  $('#clear-workspace').onclick = async () => {
+    closeModal();
+    if (await confirm({ title: 'Clear all workspace data?', body: 'This removes the CV, draft, practice answers, suggestions, and application records from this tab and this browser’s saved workspace. Export a copy first if needed.', action: 'Clear everything' })) {
+      reset(); navigate('overview'); toast('Workspace cleared.');
+    }
+  };
+};
+$('#mobile-settings').onclick = () => $('#settings').click();
+
+window.addEventListener('hashchange', () => {
+  const next = location.hash.slice(1);
+  if (next !== session.page) { session.page = names[next] ? next : 'overview'; render(); }
+});
+
+session.page = names[location.hash.slice(1)] ? location.hash.slice(1) : 'overview';
+render();
+loadStatus().then((status) => { renderStatus(); if (status.ai) render(); }); // re-render only when AI buttons need to appear
