@@ -1,6 +1,21 @@
 {
-  "name": "rolewoven", "version": "0.1.0", "private": true, "type": "module",
+  "name": "rolewoven",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
   "description": "Evidence-first career studio — responsive product prototype",
-  "scripts": { "start": "node server.mjs", "dev": "node server.mjs", "test": "node --test tests/*.test.mjs", "check": "node --check dist/app.js && node --check dist/core.js && node --check server.mjs" },
-  "engines": { "node": ">=20" }
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check dist/app.js && node --check dist/core.js && node --check server.mjs && node --check dist/import-cv.js && node --check dist/pdf-import-worker.js && node --check dist/docx-import-worker.js",
+    "vendor": "node scripts/vendor.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "mammoth": "1.13.0",
+    "pdfjs-dist": "6.5.438"
+  }
 }

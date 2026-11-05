@@ -1,0 +1,9 @@
+import { mkdir, copyFile, cp } from 'node:fs/promises';
+await mkdir('dist/vendor/pdfjs', {recursive:true});
+await mkdir('dist/vendor/mammoth', {recursive:true});
+for (const name of ['pdf.mjs','pdf.worker.mjs']) await copyFile(`node_modules/pdfjs-dist/legacy/build/${name}`,`dist/vendor/pdfjs/${name}`);
+for (const name of ['cmaps','standard_fonts','wasm']) await cp(`node_modules/pdfjs-dist/${name}`,`dist/vendor/pdfjs/${name}`,{recursive:true});
+await copyFile('node_modules/pdfjs-dist/LICENSE','dist/vendor/pdfjs/LICENSE');
+await copyFile('node_modules/mammoth/mammoth.browser.min.js','dist/vendor/mammoth/mammoth.browser.min.js');
+await copyFile('node_modules/mammoth/LICENSE','dist/vendor/mammoth/LICENSE');
+console.log('Pinned document parsers copied into the static site.');
