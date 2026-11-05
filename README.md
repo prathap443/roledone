@@ -13,7 +13,7 @@ cp .env.example .env     # add ANTHROPIC_API_KEY to enable AI; leave blank for b
 npm start
 ```
 
-Open http://localhost:3000. Set `PORT` to change the port. The server prints whether AI is connected.
+Open http://localhost:3000 locally (Replit uses port 5000 via `.replit`). Set `PORT` to change it. The server prints whether AI is connected.
 
 | Variable | Purpose |
 |---|---|

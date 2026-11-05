@@ -2,6 +2,14 @@ run = "npm start"
 entrypoint = "server.mjs"
 modules = ["nodejs-22"]
 
+# Replit injects PORT=5000 into the workspace; server.mjs honours PORT, so the preview must watch 5000.
+[env]
+PORT = "5000"
+
 [[ports]]
-localPort = 3000
+localPort = 5000
 externalPort = 80
+
+[deployment]
+run = ["npm", "start"]
+deploymentTarget = "autoscale"
