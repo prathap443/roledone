@@ -115,8 +115,10 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
       const data = await readFile(file);
       const type = MIME[extname(file)] || 'application/octet-stream';
       const headers = { 'Content-Type': type, 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
-      if (type.startsWith('text/html')) Object.assign(headers, { 'Content-Security-Policy': CSP, 'Cache-Control': 'no-cache' });
-      else if (file.includes(`${sep}vendor${sep}`)) headers['Cache-Control'] = 'public, max-age=86400';
+      if (type.startsWith('text/html')) headers['Content-Security-Policy'] = CSP;
+      // App modules must revalidate on every load so a deploy never leaves a browser running stale JS
+      // against new HTML; only the pinned vendor parsers are safe to cache.
+      headers['Cache-Control'] = file.includes(`${sep}vendor${sep}`) ? 'public, max-age=86400' : 'no-cache';
       res.writeHead(200, headers).end(data);
     } catch { res.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found'); }
   }

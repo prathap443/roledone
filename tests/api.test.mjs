@@ -75,7 +75,10 @@ test('static serving still works, with CSP on HTML and path traversal blocked', 
     const html = await call('/');
     assert.equal(html.status, 200);
     assert.match(html.headers.get('content-security-policy'), /default-src 'self'/);
-    assert.equal((await call('/core.js')).headers.get('content-type'), 'text/javascript; charset=utf-8');
+    const core = await call('/core.js');
+    assert.equal(core.headers.get('content-type'), 'text/javascript; charset=utf-8');
+    assert.equal(core.headers.get('cache-control'), 'no-cache');
+    assert.equal((await call('/vendor/mammoth/mammoth.browser.min.js')).headers.get('cache-control'), 'public, max-age=86400');
     assert.equal((await call('/..%2fpackage.json')).status, 403);
   } finally { await close(); }
 });
