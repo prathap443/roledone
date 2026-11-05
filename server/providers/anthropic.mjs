@@ -28,22 +28,31 @@ export function createAnthropicProvider({ apiKey, model = 'claude-sonnet-5-5', t
           body: JSON.stringify({
             model,
             max_tokens: maxTokens,
-            system,
+            // Claude 5.x (adaptive thinking) rejects forced tool_choice ("tool"/"any"); "auto" plus an
+            // explicit instruction is the supported way to get a single structured tool call.
+            system: `${system}\n\nRespond ONLY by calling the ${tool.name} tool with complete input. Do not reply with prose.`,
             messages: [{ role: 'user', content: user }],
             tools: [tool],
-            tool_choice: { type: 'tool', name: tool.name },
+            tool_choice: { type: 'auto' },
           }),
         });
         if (!res.ok) {
           const body = await res.text().catch(() => '');
-          const err = new Error(`Anthropic API ${res.status}: ${body.slice(0, 300)}`);
+          let detail = body.slice(0, 300);
+          try { detail = JSON.parse(body).error?.message || detail; } catch { /* keep raw */ }
+          const err = new Error(`Anthropic API ${res.status}: ${detail}`);
           err.status = res.status === 429 ? 429 : 502;
           throw err;
         }
         const data = await res.json();
-        const block = (data.content || []).find((c) => c.type === 'tool_use' && c.name === tool.name);
-        if (!block) throw Object.assign(new Error('Model returned no structured output'), { status: 502 });
-        return block.input;
+        const content = data.content || [];
+        const block = content.find((c) => c.type === 'tool_use' && c.name === tool.name);
+        if (block) return block.input;
+        // Fallback: the model answered in text. Accept it only if it is a JSON object (possibly fenced).
+        const text = content.filter((c) => c.type === 'text').map((c) => c.text).join('\n');
+        const json = text.match(/\{[\s\S]*\}/)?.[0];
+        if (json) { try { return JSON.parse(json); } catch { /* fall through */ } }
+        throw Object.assign(new Error(`Model returned no structured output (stop_reason: ${data.stop_reason || 'unknown'})`), { status: 502 });
       } catch (error) {
         if (error.name === 'AbortError') throw Object.assign(new Error('AI request timed out'), { status: 504 });
         throw error;

@@ -85,10 +85,14 @@ test('anthropic adapter forces the tool and surfaces API errors with upstream st
   const ok = createAnthropicProvider({ apiKey: 'k', model: 'm', fetchImpl: async (url, init) => { sent = { url, init: JSON.parse(init.body), headers: init.headers }; return new Response(JSON.stringify({ content: [{ type: 'tool_use', name: 't', input: { hello: 1 } }] }), { status: 200 }); } });
   const result = await ok.complete({ system: 's', user: 'u', tool: { name: 't', description: 'd', input_schema: { type: 'object' } } });
   assert.deepEqual(result, { hello: 1 });
-  assert.equal(sent.init.tool_choice.name, 't');
+  assert.deepEqual(sent.init.tool_choice, { type: 'auto' }); // forced tool_choice is rejected by Claude 5.x
+  assert.match(sent.init.system, /calling the t tool/);
   assert.equal(sent.init.model, 'm');
   assert.equal(sent.headers['x-api-key'], 'k');
   assert.equal(sent.init.temperature, undefined);
+
+  const textual = createAnthropicProvider({ apiKey: 'k', fetchImpl: async () => new Response(JSON.stringify({ content: [{ type: 'text', text: 'Here you go:\n```json\n{"hello":2}\n```' }] }), { status: 200 }) });
+  assert.deepEqual(await textual.complete({ system: 's', user: 'u', tool: { name: 't', input_schema: {} } }), { hello: 2 });
 
   const limited = createAnthropicProvider({ apiKey: 'k', fetchImpl: async () => new Response('rate limited', { status: 429 }) });
   await assert.rejects(limited.complete({ system: 's', user: 'u', tool: { name: 't', input_schema: {} } }), (e) => e.status === 429);
