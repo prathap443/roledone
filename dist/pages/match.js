@@ -1,7 +1,7 @@
 import { state, session, setSources, setDraft, currentDraft, requirements, save } from '../state.js';
 import { evidenceScore } from '../core.js';
 import { $, $$, esc, heading, toast, busy, pill, locked } from '../ui.js';
-import { extractCV } from '../import-cv.js';
+import { extractCVWithSource } from '../import-cv.js';
 import { can, needs } from '../plans.js';
 import * as api from '../api.js';
 import { placeBullet, placeLearningLine } from '../place.js';
@@ -197,13 +197,13 @@ export function bind({ loadSample, rebind }) {
     input.disabled = true; area.readOnly = true; buttons.forEach((b) => (b.disabled = true));
     status.textContent = `Reading ${file.name}…`; status.setAttribute('aria-busy', 'true');
     try {
-      const text = await extractCV(file);
+      const { text, source } = await extractCVWithSource(file);
       if (!input.isConnected) return;
       area.value = text;
-      setSources({ cv: text, jd: $('#jd').value });
+      setSources({ cv: text, jd: $('#jd').value, sourceDoc: source });
       session.isSample = false;
       $('#results').innerHTML = '';
-      status.textContent = `${file.name} loaded. Review the text above, then scan.`;
+      status.textContent = `${file.name} loaded${source ? ' — your Word design is kept for export' : ''}. Review the text above, then scan.`;
     } catch (error) {
       if (input.isConnected) { status.textContent = error.message; toast(error.message); }
     } finally {

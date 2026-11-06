@@ -1,8 +1,9 @@
-import { state, setDraft, requirements, currentDraft, save } from '../state.js';
+import { state, session, setDraft, requirements, currentDraft, save } from '../state.js';
 import { $, $$, esc, heading, empty, toast, busy, download, confirm, locked } from '../ui.js';
 import { can, needs } from '../plans.js';
 import * as api from '../api.js';
 import { toDocxBlob, printCV } from '../export.js';
+import { applyDraftToDocx } from '../docx-edit.js';
 
 export function render() {
   if (!state.cv) {
@@ -29,12 +30,12 @@ export function render() {
   <label class="field">Editable CV draft<textarea id="draft" class="editor-area" maxlength="50000">${esc(currentDraft())}</textarea></label>
   <div class="actions">
    ${ai ? '<button class="primary lime" id="suggest">Suggest clearer wording ✧</button>' : ''}
-   <button class="${ai ? 'secondary' : 'primary'}" id="export-docx">Export Word ↓</button>
+   ${session.sourceDoc ? '<button class="secondary" id="export-original">Export Word · your design ↓</button><button class="text-button" id="export-docx">Clean Word ↓</button>' : `<button class="${ai ? 'secondary' : 'primary'}" id="export-docx">Export Word ↓</button>`}
    <button class="secondary" id="export-pdf">Export PDF ↓</button>
    <button class="text-button" id="export">Plain text ↓</button>
    <button class="secondary" id="reset-draft">Restore original</button>
   </div>
-  <p class="hint">Changes are kept in this tab. Device saving is optional in workspace settings.</p>
+  <p class="hint">${session.sourceDoc ? `“Your design” writes your changes back into <strong>${esc(session.sourceDoc.name)}</strong>, keeping its fonts, colours and layout.` : 'Upload your CV as a Word .docx to export your changes in your own design.'} Changes are kept in this tab; device saving is optional in workspace settings.</p>
  </section>
 </div>
 <div id="suggestions" class="results">${suggestionsPanel()}</div>`;
@@ -69,6 +70,11 @@ export function bind({ rebind }) {
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'roledone-cv.docx'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast('Word document ready. Check headings and bullets once in Word.');
   });
+  $('#export-original')?.addEventListener('click', (e) => busy(e.currentTarget, 'Writing into your document…', async () => {
+    const { blob, replaced, inserted, deleted, unmatched } = await applyDraftToDocx(session.sourceDoc.bytes, state.cv, draftArea.value);
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = session.sourceDoc.name.replace(/\.docx$/i, '') + ' (Roledone).docx'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast(`${replaced} line${replaced === 1 ? '' : 's'} updated, ${inserted} added, ${deleted} removed in your document.${unmatched.length ? ` ${unmatched.length} new line${unmatched.length === 1 ? '' : 's'} could not be placed — check the clean Word export for them.` : ''}`);
+  }));
   $('#export-pdf').onclick = () => { try { printCV(draftArea.value); toast('Choose “Save as PDF” in the print dialog.'); } catch (error) { toast(error.message); } };
   $('#reset-draft').onclick = async () => {
     if (await confirm({ title: 'Restore the original CV?', body: 'This replaces your edited draft and clears applied suggestions. Export it first if you want to keep a copy.', action: 'Restore original' })) {

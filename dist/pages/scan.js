@@ -1,7 +1,7 @@
 import { state, session, setSources, save } from '../state.js';
 import { scanCV } from '../scan.js';
 import { $, $$, esc, heading, toast, busy } from '../ui.js';
-import { extractCV } from '../import-cv.js';
+import { extractCVWithSource } from '../import-cv.js';
 import { can, needs } from '../plans.js';
 import * as api from '../api.js';
 
@@ -102,8 +102,8 @@ function detail(scan, key) {
 }
 
 export function bind({ rebind, render: rerender }) {
-  const runScan = (cv) => {
-    setSources({ cv });
+  const runScan = (cv, sourceDoc = null) => {
+    setSources({ cv, sourceDoc });
     state.scan = scanCV(cv); state.scanSummary = null; session.tile = null; save();
     rerender(); window.scrollTo(0, 0);
     toast(`CV score ${state.scan.score}.`);
@@ -112,7 +112,7 @@ export function bind({ rebind, render: rerender }) {
   $('#scan-file')?.addEventListener('change', async (e) => {
     const input = e.target, file = input.files[0]; if (!file) return;
     const status = $('#scan-status'); status.textContent = `Reading ${file.name}…`; input.disabled = true;
-    try { runScan(await extractCV(file)); } catch (error) { status.textContent = error.message; toast(error.message); } finally { input.disabled = false; input.value = ''; }
+    try { const { text, source } = await extractCVWithSource(file); runScan(text, source); } catch (error) { status.textContent = error.message; toast(error.message); } finally { input.disabled = false; input.value = ''; }
   });
   $$('[data-tile]').forEach((b) => (b.onclick = () => { session.tile = session.tile === b.dataset.tile ? null : b.dataset.tile; $$('[data-tile]').forEach((t) => t.setAttribute('aria-expanded', t.dataset.tile === session.tile)); $('#tile-detail').innerHTML = session.tile ? detail(state.scan || scanCV(state.cv), session.tile) : ''; }));
   $('#print')?.addEventListener('click', () => window.print());

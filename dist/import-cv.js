@@ -14,16 +14,20 @@ export function cleanText(value) {
  if (text.includes('\u0000')) throw new Error('This does not look like a readable text file. Save it as UTF-8 TXT, PDF, or DOCX.');
  return text;
 }
-export async function extractCV(file) {
+export async function extractCV(file) { return (await extractCVWithSource(file)).text; }
+/** Extract text and, for .docx, keep the original bytes so edits can be written back into the user's own design. */
+export async function extractCVWithSource(file) {
  const kind=validateFile(file);
- if(kind==='txt')return cleanText(await file.text());
- const buffer=await file.arrayBuffer();
+ if(kind==='txt')return {text:cleanText(await file.text()),source:null};
+ const original=await file.arrayBuffer();
+ const source=kind==='docx'?{name:file.name,bytes:new Uint8Array(original.slice(0))}:null;
+ const buffer=original;
  const bytes=new Uint8Array(buffer);
  if(kind==='pdf' && !new TextDecoder().decode(bytes.subarray(0,1024)).includes('%PDF-')) throw new Error('This file is not a valid PDF. Export a fresh PDF and try again.');
  if(kind==='docx' && (bytes[0]!==0x50 || bytes[1]!==0x4b)) throw new Error('This file is not a valid DOCX. Save it as a Word .docx file and try again.');
  return new Promise((resolve,reject)=>{
   const worker=new Worker(new URL(kind==='pdf'?'pdf-import-worker.js':'docx-import-worker.js',import.meta.url),kind==='pdf'?{type:'module'}:{});
-  const finish=(error,text)=>{clearTimeout(timer);worker.terminate();if(error)reject(new Error(error));else{try{resolve(cleanText(text));}catch(e){reject(e);}}};
+  const finish=(error,text)=>{clearTimeout(timer);worker.terminate();if(error)reject(new Error(error));else{try{resolve({text:cleanText(text),source});}catch(e){reject(e);}}};
   const timer=setTimeout(()=>finish('Reading this document took too long. Try exporting a simpler PDF or DOCX, or paste the text.'),30000);
   worker.onmessage=e=>finish(e.data.error,e.data.text);
   worker.onerror=e=>{e.preventDefault();finish('Could not start the document reader. Refresh the page and try again, or paste your CV text.');};

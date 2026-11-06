@@ -29,7 +29,22 @@ export const blank = () => ({
 });
 
 export const state = blank();
-export const session = { page: 'overview', question: 0, isSample: false, ai: { ai: false, provider: null, model: null } };
+export const session = { page: 'overview', question: 0, isSample: false, ai: { ai: false, provider: null, model: null }, sourceDoc: null /* {name, bytes} of the uploaded .docx */ };
+
+// The uploaded .docx (binary) lives in IndexedDB when device saving is on; localStorage is text-only.
+const DB = 'roledone', STORE = 'files';
+function withStore(mode, fn) {
+  return new Promise((resolve) => {
+    try {
+      const open = indexedDB.open(DB, 1);
+      open.onupgradeneeded = () => open.result.createObjectStore(STORE);
+      open.onerror = () => resolve(undefined);
+      open.onsuccess = () => { try { const tx = open.result.transaction(STORE, mode); const req = fn(tx.objectStore(STORE)); tx.oncomplete = () => resolve(req?.result); tx.onerror = () => resolve(undefined); } catch { resolve(undefined); } };
+    } catch { resolve(undefined); }
+  });
+}
+export async function loadSourceDoc() { const doc = await withStore('readonly', (s) => s.get('sourceDoc')); if (doc?.bytes && state.remember) session.sourceDoc = doc; }
+export function setSourceDoc(doc) { session.sourceDoc = doc || null; if (state.remember) withStore('readwrite', (s) => (doc ? s.put(doc, 'sourceDoc') : s.delete('sourceDoc'))); }
 
 let onStorageError = () => {};
 export function setStorageErrorHandler(fn) { onStorageError = fn; }
@@ -48,25 +63,31 @@ export function load() {
 export function save() {
   if (!state.remember) return;
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { onStorageError(); }
+  if (session.sourceDoc) withStore('readwrite', (s) => s.put(session.sourceDoc, 'sourceDoc'));
 }
 
 export function forget() {
   try { localStorage.removeItem(KEY); LEGACY_KEYS.forEach((k) => localStorage.removeItem(k)); } catch { /* ignore */ }
+  withStore('readwrite', (s) => s.delete('sourceDoc'));
 }
 
 export function reset() {
   forget();
+  session.sourceDoc = null;
   Object.assign(state, blank());
   session.isSample = false;
   session.question = 0;
 }
 
 /** Replace the CV and/or JD; anything derived from them is invalidated. */
-export function setSources({ cv = state.cv, jd = state.jd }) {
+export function setSources({ cv = state.cv, jd = state.jd, sourceDoc }) {
   const cvChanged = cv !== state.cv, jdChanged = jd !== state.jd;
   state.cv = cv;
   state.jd = jd;
-  if (cvChanged) { state.draft = null; state.suggestions = null; state.dismissed = []; state.applied = []; state.scan = null; state.scanSummary = null; }
+  if (cvChanged) {
+    setSourceDoc(sourceDoc || null); // a pasted or re-uploaded CV no longer matches the old file
+    state.draft = null; state.suggestions = null; state.dismissed = []; state.applied = []; state.scan = null; state.scanSummary = null;
+  }
   if (cvChanged || jdChanged) { state.answers = {}; state.feedback = {}; state.requirements = null; state.matchMeta = null; state.questions = null; state.gaps = {}; session.question = 0; }
   save();
 }

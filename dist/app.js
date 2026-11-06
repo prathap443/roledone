@@ -2,7 +2,7 @@
 // Pages live in ./pages/*.js; shared state in ./state.js; server calls in ./api.js.
 
 import { sampleCV, sampleJD } from './core.js';
-import { state, session, load, save, reset, forget, setSources, setStorageErrorHandler } from './state.js';
+import { state, session, load, save, reset, forget, setSources, setStorageErrorHandler, loadSourceDoc } from './state.js';
 import { $, $$, esc, toast, modal, closeModal, confirm, download } from './ui.js';
 import { loadStatus, aiAvailable, providerLabel } from './api.js';
 import { PLANS, COMPARISON, plan } from './plans.js';
@@ -108,3 +108,4 @@ window.addEventListener('hashchange', () => {
 session.page = names[location.hash.slice(1)] ? location.hash.slice(1) : 'overview';
 render();
 loadStatus().then((status) => { renderStatus(); if (status.ai) render(); }); // re-render only when AI buttons need to appear
+loadSourceDoc().then(() => { if (session.sourceDoc && session.page === 'editor') render(); });
