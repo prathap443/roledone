@@ -18,7 +18,10 @@ Open http://localhost:3000 locally (Replit uses port 5000 via `.replit`). Set `P
 | Variable | Purpose |
 |---|---|
 | `ANTHROPIC_API_KEY` | Enables the AI evidence layer. Server-side only; never shipped to the browser. |
-| `ANTHROPIC_MODEL` | Defaults to `claude-sonnet-5-5`. |
+| `ANTHROPIC_MODEL` | Quality tier for role match and CV suggestions. Defaults to `claude-sonnet-5-5`. |
+| `ANTHROPIC_MODEL_FAST` | Fast tier for Gap Interview, questions, answer review and scan summary. Defaults to `claude-haiku-5-5` (about 20× cheaper). |
+| `ANTHROPIC_EFFORT` | Thinking effort on Claude 5.x: `low` (default), `medium`, `high`. |
+| `ROLEWOVEN_DEFAULT_PLAN` | `free` (default), `pro` or `premium` — plan every visitor gets until accounts exist. |
 | `ROLEWOVEN_PROVIDER` | `anthropic`, `mock` (offline, rule-based, for development) or `off`. Defaults to `anthropic` when a key is set. |
 
 ```sh
@@ -34,7 +37,8 @@ npm test
 - **CV studio** — proposes rewrites of lines already in the draft. The server rejects any proposal that introduces a number not present in the CV or draft, or that names a requirement the CV has no evidence for. Details that *would* strengthen a line but are not in the CV are returned as questions for the candidate, never written into the text. The user applies or dismisses each change.
 - **Interview room** — structured STAR review of a practice answer: what is present, what is missing, strengths, improvements, and the follow-up a good interviewer would ask.
 - Consent prompt before the first request; text is sent only when an AI button is pressed; the server does not store or log document bodies.
-- Rate limiting, 256 KB body cap, 50,000-character field caps, Content-Security-Policy, and a 60 s upstream timeout.
+- Rate limiting, 256 KB body cap, 50,000-character field caps, Content-Security-Policy, and a 90 s upstream timeout.
+- Cost controls: two model tiers, low thinking effort, and prompt caching (the tool set, system prompt and CV open every request, so a session pays for the CV once). Token usage per call is logged server-side.
 
 - **Evidence Score** (0–100) — weighted coverage of the role's requirements: must-haves count fully, nice-to-haves half, partial mentions half credit. Shown with its breakdown; not an ATS score.
 - **Gap Interview** — for each missing requirement, the AI asks two or three concrete questions answered Yes/No with optional detail; if the answers show real experience it drafts one bullet from the candidate's own words (numbers must come from the answers or CV; other missing skills cannot be smuggled in) and the user adds it to the draft. If not, it offers a truthful learning-goal line. Nothing is ever added without the user's own account of it.

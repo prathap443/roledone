@@ -89,7 +89,8 @@ test('anthropic adapter forces the tool and surfaces API errors with upstream st
   const result = await ok.complete({ system: 's', user: 'u', tool: { name: 't', description: 'd', input_schema: { type: 'object' } } });
   assert.deepEqual(result, { hello: 1 });
   assert.deepEqual(sent.init.tool_choice, { type: 'auto' }); // forced tool_choice is rejected by Claude 5.x
-  assert.match(sent.init.system, /calling the t tool/);
+  assert.equal(sent.init.system[0].cache_control.type, 'ephemeral');
+  assert.deepEqual(sent.init.output_config, { effort: 'low' });
   assert.equal(sent.init.model, 'm');
   assert.equal(sent.headers['x-api-key'], 'k');
   assert.equal(sent.init.temperature, undefined);
@@ -130,4 +131,25 @@ test('scan summary endpoint drops strengths without a real CV quote', async () =
     assert.ok(sampleCV.includes(res.summary.strengths[0].evidence));
     assert.equal(res.summary.fixes.length, 1);
   } finally { await close(); }
+});
+
+test('anthropic adapter caches CV blocks, routes tiers, and drops effort when a model rejects it', async () => {
+  const calls = [];
+  const provider = createAnthropicProvider({ apiKey: 'k', model: 'q', fastModel: 'f', log: { info() {} }, fetchImpl: async (url, init) => {
+    const body = JSON.parse(init.body); calls.push(body);
+    if (body.output_config && body.model === 'f') return new Response(JSON.stringify({ error: { message: 'output_config.effort is not supported' } }), { status: 400 });
+    return new Response(JSON.stringify({ content: [{ type: 'tool_use', name: 't', input: { ok: 1 } }], usage: { input_tokens: 10, cache_read_input_tokens: 5, output_tokens: 2 } }), { status: 200 });
+  } });
+  const tool = { name: 't', input_schema: {} }, other = { name: 'u', input_schema: {} };
+  await provider.complete({ system: 's', blocks: [{ text: '<cv>…</cv>', cache: true }, { text: 'task' }], tool, tools: [tool, other], tier: 'fast' });
+  assert.equal(calls.length, 2, 'retried once without effort');
+  assert.equal(calls[1].output_config, undefined);
+  assert.equal(calls[1].model, 'f');
+  assert.deepEqual(calls[1].tools.map((t) => t.name), ['t', 'u']);
+  assert.equal(calls[1].messages[0].content[0].cache_control.type, 'ephemeral');
+  await provider.complete({ system: 's', blocks: [{ text: 'x' }], tool, tier: 'fast' });
+  assert.equal(calls.length, 3, 'remembers the model rejects effort');
+  await provider.complete({ system: 's', blocks: [{ text: 'x' }], tool, tier: 'quality' });
+  assert.equal(calls[3].model, 'q'); assert.deepEqual(calls[3].output_config, { effort: 'low' });
+  assert.equal(provider.usage.calls, 3); assert.equal(provider.usage.cacheRead, 15);
 });

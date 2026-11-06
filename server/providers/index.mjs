@@ -14,7 +14,12 @@ export function providerFromEnv(env = process.env) {
   if (choice === 'mock') return createMockProvider();
   if (choice === 'anthropic') {
     if (!env.ANTHROPIC_API_KEY) throw new Error('ROLEWOVEN_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set');
-    return createAnthropicProvider({ apiKey: env.ANTHROPIC_API_KEY, model: env.ANTHROPIC_MODEL || 'claude-sonnet-5-5' });
+    return createAnthropicProvider({
+      apiKey: env.ANTHROPIC_API_KEY,
+      model: env.ANTHROPIC_MODEL || 'claude-sonnet-5-5',          // match + CV suggestions
+      fastModel: env.ANTHROPIC_MODEL_FAST || 'claude-haiku-5-5',  // everything else
+      effort: ['low', 'medium', 'high'].includes(env.ANTHROPIC_EFFORT) ? env.ANTHROPIC_EFFORT : 'low',
+    });
   }
   throw new Error(`Unknown ROLEWOVEN_PROVIDER "${choice}" (expected anthropic, mock or off)`);
 }

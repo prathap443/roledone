@@ -154,21 +154,34 @@ const SCAN_TOOL = {
   },
 };
 
+const ALL_TOOLS = [MATCH_TOOL, SUGGEST_TOOL, FEEDBACK_TOOL, QUESTIONS_TOOL, GAP_QUESTIONS_TOOL, GAP_BULLET_TOOL, SCAN_TOOL];
+
+/**
+ * Cache-friendly request: identical tool set and system prompt every time, CV first and cached,
+ * JD second and cached, task-specific text last. `tier` picks the model.
+ */
+function request(provider, { tool, tier, cv, jd, task, context, maxTokens }) {
+  const blocks = [];
+  if (cv) blocks.push({ text: wrap('cv', cv), cache: true });
+  if (jd) blocks.push({ text: wrap('jd', jd), cache: true });
+  blocks.push({ text: task });
+  return provider.complete({ system: GROUNDING_RULES, blocks, user: blocks.map((b) => b.text).join('\n\n'), tool, tools: ALL_TOOLS, tier, context, maxTokens });
+}
+
 export function createAI(provider) {
   return {
     provider,
     status() {
       const defaultPlan = ['free', 'pro', 'premium'].includes(process.env.ROLEWOVEN_DEFAULT_PLAN) ? process.env.ROLEWOVEN_DEFAULT_PLAN : 'free';
-      return provider ? { ai: true, provider: provider.name, model: provider.model, defaultPlan } : { ai: false, provider: null, model: null, defaultPlan };
+      return provider ? { ai: true, provider: provider.name, model: provider.model, fastModel: provider.fastModel || provider.model, defaultPlan } : { ai: false, provider: null, model: null, defaultPlan };
     },
 
     async match({ cv, jd }) {
-      const raw = await provider.complete({
-        system: GROUNDING_RULES,
-        user: `Extract the requirements from the job description, then check each against the CV.\n\nInclude technical skills, tools, platforms, methodologies, domain knowledge, and behavioural requirements (communication, leadership, ownership). Skip generic filler ("team player") unless the advert makes it a real requirement. Prefer 8–20 requirements.\n\n${wrap('jd', jd)}\n\n${wrap('cv', cv)}`,
-        tool: MATCH_TOOL,
+      const raw = await request(provider, {
+        tool: MATCH_TOOL, tier: 'quality', cv, jd,
+        task: `Extract the requirements from the job description above, then check each against the CV above.\n\nInclude technical skills, tools, platforms, methodologies, domain knowledge, and behavioural requirements (communication, leadership, ownership). Skip generic filler ("team player") unless the advert makes it a real requirement. Prefer 8–20 requirements. Keep notes to one short sentence.`,
         context: { cv, jd },
-        maxTokens: 6000,
+        maxTokens: 5000,
       });
       const { requirements, dropped, repaired } = validateMatch(raw, { cv, jd });
       return { requirements, meta: { provider: provider.name, model: provider.model, dropped, repaired } };
@@ -176,12 +189,12 @@ export function createAI(provider) {
 
     async suggest({ cv, draft, jd, requirements }) {
       const focus = requirements.filter((r) => r.status !== 'evidence').map((r) => `- ${r.name} (${r.status})`).join('\n') || '- (none; focus on clarity and impact)';
-      const raw = await provider.complete({
-        system: GROUNDING_RULES,
-        user: `The candidate is editing their CV for the role below. Propose up to 8 rewrites of EXISTING lines in <draft> that make relevant experience clearer.\n\nPriorities:\n- Lines that relate to these requirements where evidence is partial or missing:\n${focus}\n- Passive or vague lines ("worked on", "responsible for", "helped with").\n- Lines where a tool or outcome in <cv> is present but buried.\n\nYou may reorder words, use stronger verbs, surface tools already named, and make outcomes explicit ONLY if the outcome is stated in <cv>. If a line would benefit from a metric the CV does not contain, put a question in "unsupported" instead. Never add a requirement the CV does not show.\n\n${wrap('jd', jd)}\n\n${wrap('cv', cv)}\n\n${wrap('draft', draft)}`,
-        tool: SUGGEST_TOOL,
+      const sameDraft = draft.trim() === cv.trim();
+      const raw = await request(provider, {
+        tool: SUGGEST_TOOL, tier: 'quality', cv, jd,
+        task: `${sameDraft ? 'The <draft> is identical to <cv> above.' : wrap('draft', draft)}\n\nThe candidate is editing their CV for the role above. Propose up to 8 rewrites of EXISTING lines in the draft that make relevant experience clearer.\n\nPriorities:\n- Lines that relate to these requirements where evidence is partial or missing:\n${focus}\n- Passive or vague lines ("worked on", "responsible for", "helped with").\n- Lines where a tool or outcome in <cv> is present but buried.\n\nYou may reorder words, use stronger verbs, surface tools already named, and make outcomes explicit ONLY if the outcome is stated in <cv>. If a line would benefit from a metric the CV does not contain, put a question in "unsupported" instead. Never add a requirement the CV does not show. Keep rationale to one sentence.`,
         context: { cv, draft, jd, requirements },
-        maxTokens: 6000,
+        maxTokens: 5000,
       });
       const { suggestions, rejected } = validateSuggestions(raw, { cv, draft, requirements });
       return { suggestions, meta: { provider: provider.name, model: provider.model, rejected: rejected.length } };
@@ -190,10 +203,9 @@ export function createAI(provider) {
     async questions({ cv, jd, requirements, level = 'technical', count = 5 }) {
       const list = requirements.map((r) => `- ${r.name} [${r.status}]`).join('\n');
       const depth = Math.round(count * 0.4), gap = Math.round(count * 0.25), behavioural = Math.max(1, Math.round(count * 0.15)), scenario = count - depth - gap - behavioural;
-      const raw = await provider.complete({
-        system: GROUNDING_RULES,
-        user: `Write exactly ${count} interview questions for this candidate and role at ${level === 'screening' ? 'recruiter screening' : level === 'senior' ? 'senior panel' : 'technical interview'} level.\n\nMix: ${depth} depth questions on requirements marked evidence (reference the candidate's actual projects or tools from the CV; cover as many different evidenced requirements as possible rather than repeating one), ${gap} gap questions on requirements marked gap or partial (how they would approach it, where they would need support), ${behavioural} behavioural question${behavioural > 1 ? 's' : ''} from responsibilities in the JD, and ${scenario} realistic scenario question${scenario === 1 ? '' : 's'} from the role's day-to-day. Order them as an interviewer would: warm-up, depth, scenarios, gaps, behavioural. No two questions may test the same thing. Every question must be specific to this CV and JD; no generic "tell me about yourself".\n\nRequirements:\n${list}\n\n${wrap('jd', jd)}\n\n${wrap('cv', cv)}`,
-        tool: QUESTIONS_TOOL,
+      const raw = await request(provider, {
+        tool: QUESTIONS_TOOL, tier: 'fast', cv, jd,
+        task: `Write exactly ${count} interview questions for this candidate and role at ${level === 'screening' ? 'recruiter screening' : level === 'senior' ? 'senior panel' : 'technical interview'} level.\n\nMix: ${depth} depth questions on requirements marked evidence (reference the candidate's actual projects or tools from the CV; cover as many different evidenced requirements as possible rather than repeating one), ${gap} gap questions on requirements marked gap or partial (how they would approach it, where they would need support), ${behavioural} behavioural question${behavioural > 1 ? 's' : ''} from responsibilities in the JD, and ${scenario} realistic scenario question${scenario === 1 ? '' : 's'} from the role's day-to-day. Order them as an interviewer would: warm-up, depth, scenarios, gaps, behavioural. No two questions may test the same thing. Every question must be specific to this CV and JD; no generic "tell me about yourself".\n\nRequirements:\n${list}`,
         context: { cv, jd, requirements, level, count },
         maxTokens: 1200 + 320 * count,
       });
@@ -201,24 +213,22 @@ export function createAI(provider) {
     },
 
     async gapQuestions({ cv, jd, requirement }) {
-      const raw = await provider.complete({
-        system: GROUNDING_RULES,
-        user: `The CV does not mention this requirement from the job description: "${requirement.name}". Source line from the advert: "${requirement.source || ''}".\n\nAsk the candidate 2–3 short, concrete questions to find out whether they have relevant experience, including with equivalent or adjacent tools. Do not assume they have it.\n\n${wrap('cv', cv)}`,
-        tool: GAP_QUESTIONS_TOOL,
+      const raw = await request(provider, {
+        tool: GAP_QUESTIONS_TOOL, tier: 'fast', cv,
+        task: `The CV above does not mention this requirement from the job description: "${requirement.name}". Source line from the advert: "${requirement.source || ''}".\n\nAsk the candidate 2–3 short, concrete questions to find out whether they have relevant experience, including with equivalent or adjacent tools. Do not assume they have it.`,
         context: { cv, jd, requirement },
-        maxTokens: 1200,
+        maxTokens: 1000,
       });
       return { ...validateGapQuestions(raw), meta: { provider: provider.name, model: provider.model } };
     },
 
     async gapBullet({ cv, requirement, questions, answers, otherGaps }) {
       const qa = questions.map((q, i) => `Q: ${q}\nA: ${answers[i] || '(no answer)'}`).join('\n\n');
-      const raw = await provider.complete({
-        system: GROUNDING_RULES,
-        user: `Requirement missing from the CV: "${requirement.name}".\n\nThe candidate answered these questions. Decide whether their answers show real experience. If supported or adjacent, draft ONE CV bullet using only facts, tools and numbers that appear in their answers or the CV. Never upgrade "I read about it" or "I'd like to learn" into experience. A bare "Yes" with no detail is only usable if the CV itself already contains facts that support it (for example a question about regulated-sector experience and a CV listing government departments); then draft from those CV facts, otherwise return verdict unsupported and explain what detail would be needed. If unsupported, leave the bullet empty and offer a truthful learning_line instead. Always set placement_role_line to the exact role heading line from the CV where the bullet belongs (the employer or client the candidate names, else the best-fitting role); copy it character for character.\n\n<answers>\n${qa}\n</answers>\n\n${wrap('cv', cv)}`,
-        tool: GAP_BULLET_TOOL,
+      const raw = await request(provider, {
+        tool: GAP_BULLET_TOOL, tier: 'fast', cv,
+        task: `Requirement missing from the CV above: "${requirement.name}".\n\nThe candidate answered these questions. Decide whether their answers show real experience. If supported or adjacent, draft ONE CV bullet using only facts, tools and numbers that appear in their answers or the CV. Never upgrade "I read about it" or "I'd like to learn" into experience. A bare "Yes" with no detail is only usable if the CV itself already contains facts that support it (for example a question about regulated-sector experience and a CV listing government departments); then draft from those CV facts, otherwise return verdict unsupported and explain what detail would be needed. If unsupported, leave the bullet empty and offer a truthful learning_line instead. Always set placement_role_line to the exact role heading line from the CV where the bullet belongs (the employer or client the candidate names, else the best-fitting role); copy it character for character.\n\n<answers>\n${qa}\n</answers>`,
         context: { cv, requirement, questions, answers },
-        maxTokens: 1200,
+        maxTokens: 1000,
       });
       return { ...validateGapBullet(raw, { cv, answers, requirement: requirement.name, otherGaps }), meta: { provider: provider.name, model: provider.model } };
     },
@@ -231,23 +241,21 @@ export function createAI(provider) {
         scan.parts.readability.buzzwords.length ? `Buzzwords present: ${scan.parts.readability.buzzwords.join(', ')}.` : '',
         scan.parts.parse.checks.filter((c) => !c.ok).map((c) => `Parse check failed: ${c.label}.`).join(' '),
       ].filter(Boolean).join('\n');
-      const raw = await provider.complete({
-        system: GROUNDING_RULES,
-        user: `A deterministic scanner produced these facts about the CV. Write the human summary: a headline, up to five strengths each backed by a verbatim CV quote, and the three fixes that would most improve it. Base fixes on the facts and on what you can see in the CV. Do not restate the scores. Missing mentions may be missing evidence, not missing ability — phrase fixes as "if you have done X, show it", never as "add X".\n\n<facts>\n${facts}\n</facts>\n\n${wrap('cv', cv)}`,
-        tool: SCAN_TOOL,
+      const raw = await request(provider, {
+        tool: SCAN_TOOL, tier: 'fast', cv,
+        task: `A deterministic scanner produced these facts about the CV above. Write the human summary: a headline, up to five strengths each backed by a verbatim CV quote, and the three fixes that would most improve it. Base fixes on the facts and on what you can see in the CV. Do not restate the scores. Missing mentions may be missing evidence, not missing ability — phrase fixes as "if you have done X, show it", never as "add X".\n\n<facts>\n${facts}\n</facts>`,
         context: { cv, scan },
-        maxTokens: 2500,
+        maxTokens: 2000,
       });
       return { summary: validateScanSummary(raw, { cv }), meta: { provider: provider.name, model: provider.model } };
     },
 
     async feedback({ question, answer, cv }) {
-      const raw = await provider.complete({
-        system: GROUNDING_RULES,
-        user: `Review this practice answer. Assess structure (Situation, Task, Action, Result), clarity of the candidate's personal contribution, and whether the outcome is explained. You are not assessing technical correctness. Be specific to what they wrote.${cv ? ' Use the CV only to notice relevant experience they could have mentioned.' : ''}\n\n${wrap('question', question)}\n\n${wrap('answer', answer)}${cv ? `\n\n${wrap('cv', cv)}` : ''}`,
-        tool: FEEDBACK_TOOL,
+      const raw = await request(provider, {
+        tool: FEEDBACK_TOOL, tier: 'fast', cv,
+        task: `Review this practice answer. Assess structure (Situation, Task, Action, Result), clarity of the candidate's personal contribution, and whether the outcome is explained. You are not assessing technical correctness. Be specific to what they wrote.${cv ? ' Use the CV above only to notice relevant experience they could have mentioned.' : ''}\n\n${wrap('question', question)}\n\n${wrap('answer', answer)}`,
         context: { question, answer, cv },
-        maxTokens: 2500,
+        maxTokens: 1500,
       });
       return { feedback: validateFeedback(raw), meta: { provider: provider.name, model: provider.model } };
     },

@@ -13,5 +13,5 @@ const port = Number(process.env.PORT || 3000);
 http.createServer(createHandler({ ai })).listen(port, '0.0.0.0', () => {
   const status = ai.status();
   console.log(`Rolewoven: http://localhost:${port}`);
-  console.log(status.ai ? `AI: ${status.provider} (${status.model})` : 'AI: not configured — browser-only mode. Set ANTHROPIC_API_KEY to enable.');
+  console.log(status.ai ? `AI: ${status.provider} (quality: ${status.model}, fast: ${status.fastModel})` : 'AI: not configured — browser-only mode. Set ANTHROPIC_API_KEY to enable.');
 });
