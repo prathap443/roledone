@@ -75,9 +75,10 @@ export function createMockProvider() {
       if (tool.name === 'draft_bullet') {
         const joined = context.answers.filter((a) => !/^no\.?$/i.test(a.trim())).join(' ');
         if (!joined || (/\b(no|never|not really|haven't|have not)\b/i.test(joined) && joined.length < 80)) return { verdict: 'unsupported', bullet: '', explanation: 'Your answers do not describe hands-on experience.', learning_line: `Currently learning ${context.requirement.name}.` };
-        const detail = context.answers.find((a) => /^yes\b/i.test(a.trim()))?.replace(/^yes\.?\s*/i, '').replace(/\(no further detail[^)]*\)/i, '').trim() || context.answers[0].trim();
+        const detail = context.answers.filter((a) => /^yes\b/i.test(a.trim())).map((a) => a.replace(/^yes\.?\s*/i, '').replace(/\(no further detail[^)]*\)/i, '').trim()).find(Boolean) || '';
+        if (!detail && !/\bgovernment\b/i.test(context.cv)) return { verdict: 'needs_detail', bullet: '', explanation: 'A bare yes.', learning_line: '', placement_role_line: null, follow_up: `Which project did you use ${context.requirement.name} on, and what did you do with it?` };
         const roleLine = sentences(context.cv).find((l) => /\b(19[89]\d|20[0-4]\d)\b/.test(l) && l.split(/\s+/).length <= 16) || null;
-        return { verdict: 'supported', bullet: `Used ${context.requirement.name}: ${detail || 'as shown in the CV'}`, explanation: 'Drafted from your answer.', learning_line: '', placement_role_line: roleLine };
+        return { verdict: 'supported', bullet: `Used ${context.requirement.name}: ${detail || 'as shown in the CV'}`, explanation: 'Drafted from your answer.', learning_line: '', placement_role_line: roleLine, follow_up: '' };
       }
       if (tool.name === 'summarise_scan') {
         const ls = sentences(context.cv);

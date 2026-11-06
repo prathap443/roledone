@@ -81,8 +81,14 @@ function gapInterview(r, gap) {
   if (!gap) return `<div class="gap-cta"><span>Have this experience but never wrote it down?</span><button class="secondary" data-gap-start="${r.id}">Answer two quick questions ✧</button></div>`;
   if (gap.result) {
     const res = gap.result;
-    if (res.added) return `<div class="gap-done">✓ Added ${res.where ? `under <strong>${esc(res.where)}</strong>` : 'to your CV draft'}: <em>${esc(res.bullet || res.learning_line)}</em></div>`;
+    if (res.added) return `<div class="gap-done">✓ Added ${res.where ? (/^end of|^after/.test(res.where) ? `at the ${esc(res.where)}` : `under <strong>${esc(res.where)}</strong>`) : 'to your CV draft'}: <em>${esc(res.bullet || res.learning_line)}</em></div>`;
+    if (res.verdict === 'needs_detail') return `<form class="gap-form follow-up-form" data-gap-followup="${r.id}">
+ <p class="hint">${esc(res.explanation)}</p>
+ <label class="field"><strong>One more detail:</strong> ${esc(res.follow_up)}<textarea data-gap-followup-answer maxlength="2000" rows="2" placeholder="Where, what you did, roughly when."></textarea></label>
+ <div class="actions"><button class="primary" type="submit">Draft my bullet ✧</button><button class="text-button" type="button" data-gap-reset="${r.id}">Start again</button></div>
+</form>`;
     if (res.verdict === 'unsupported') return `<div class="gap-result unsupported"><strong>Not enough to claim it — and that is fine.</strong><p>${esc(res.explanation)}</p>${res.learning_line ? `<p class="hint">Truthful alternative: “${esc(res.learning_line)}”</p><div class="actions"><button class="secondary" data-gap-learning="${r.id}">Add as a learning goal</button><button class="text-button" data-gap-reset="${r.id}">Start again</button></div>` : `<div class="actions"><button class="text-button" data-gap-reset="${r.id}">Start again</button></div>`}</div>`;
+    if (!res.bullet) return `<div class="gap-result unsupported"><strong>Nothing to add yet.</strong><p>${esc(res.explanation || 'The draft came back empty.')}</p><div class="actions"><button class="text-button" data-gap-reset="${r.id}">Start again</button></div></div>`;
     return `<div class="gap-result"><strong>${res.verdict === 'adjacent' ? 'Related experience, stated honestly' : 'Drafted from your answers'}</strong><p class="diff-proposed"><span>Proposed bullet${res.placement ? ` · goes under “${esc(res.placement)}”` : ' · goes at the end of Experience'}</span>${esc(res.bullet)}</p><p class="hint">${esc(res.explanation)} Edit it in CV studio after adding.</p><div class="actions"><button class="primary" data-gap-add="${r.id}">Add to CV draft</button><button class="text-button" data-gap-reset="${r.id}">Start again</button></div></div>`;
   }
   const choice = (i) => gap.choices?.[i] || '';
@@ -168,6 +174,22 @@ export function bind({ loadSample, rebind }) {
         showResults(false);
       });
     }));
+    $$('[data-gap-followup]').forEach((form) => (form.onsubmit = async (e) => {
+      e.preventDefault();
+      const id = form.dataset.gapFollowup, r = requirements().find((x) => x.id === id), gap = state.gaps[id];
+      const extra = $('[data-gap-followup-answer]', form).value.trim();
+      if (extra.length < 5) { toast('Add a line of detail, or start again and answer No.'); return; }
+      const choices = gap.choices || [];
+      const answers = gap.questions.map((q, i) => choices[i] === 'yes' ? `Yes.${gap.answers[i]?.trim() ? ' ' + gap.answers[i].trim() : ''}` : 'No.');
+      const questions = [...gap.questions, gap.result.follow_up];
+      answers.push(`Yes. ${extra}`);
+      gap.followUp = { question: gap.result.follow_up, answer: extra }; save();
+      await busy($('button[type="submit"]', form), 'Drafting…', async () => {
+        const res = await api.gapBullet({ cv: state.cv, requirement: r, questions, answers, otherGaps: gapsOf().filter((g) => g.id !== id), finalRound: true });
+        gap.result = res; save();
+        showResults(false);
+      });
+    }));
     $$('[data-gap-reset]').forEach((b) => (b.onclick = () => { delete state.gaps[b.dataset.gapReset]; save(); showResults(false); }));
     const addLine = (id, placed, line, status, note) => {
       const r = state.requirements.find((x) => x.id === id);
@@ -179,8 +201,9 @@ export function bind({ loadSample, rebind }) {
     $$('[data-gap-add]').forEach((b) => (b.onclick = () => {
       const id = b.dataset.gapAdd, res = state.gaps[id].result;
       const placed = placeBullet(currentDraft(), res.bullet, res.placement);
-      addLine(id, placed, res.bullet, res.verdict === 'adjacent' ? 'partial' : 'evidence', `Added from your Gap Interview answers under “${placed.where}”. Review it in context in CV studio.`);
-      toast(`Bullet added under ${placed.where}. Evidence Score updated.`);
+      const whereText = /^end of|^after/.test(placed.where) ? `at the ${placed.where}` : `under “${placed.where}”`;
+      addLine(id, placed, res.bullet, res.verdict === 'adjacent' ? 'partial' : 'evidence', `Added from your Gap Interview answers ${whereText}. Review it in context in CV studio.`);
+      toast(`Bullet added ${whereText}. Evidence Score updated.`);
     }));
     $$('[data-gap-learning]').forEach((b) => (b.onclick = () => {
       const id = b.dataset.gapLearning, res = state.gaps[id].result;

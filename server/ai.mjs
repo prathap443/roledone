@@ -124,9 +124,10 @@ const GAP_BULLET_TOOL = {
   name: 'draft_bullet',
   description: 'Decide whether the candidate’s answers support the requirement and, if so, draft one CV bullet from their answers.',
   input_schema: {
-    type: 'object', required: ['verdict', 'bullet', 'explanation', 'learning_line', 'placement_role_line'],
+    type: 'object', required: ['verdict', 'bullet', 'explanation', 'learning_line', 'placement_role_line', 'follow_up'],
     properties: {
-      verdict: { type: 'string', enum: ['supported', 'adjacent', 'unsupported'], description: 'supported = answers show direct experience; adjacent = related experience worth stating honestly; unsupported = no real experience described.' },
+      verdict: { type: 'string', enum: ['supported', 'adjacent', 'needs_detail', 'unsupported'], description: 'supported = the candidate says they did it and gives any detail (their statement is the fact; draft from it); adjacent = related experience worth stating honestly; needs_detail = they answered Yes but gave nothing to draft from and the CV only lists the skill, so ask ONE specific follow-up; unsupported = they said No or their words say they have not done it.' },
+      follow_up: { type: 'string', description: 'Only when verdict is needs_detail: one short, concrete question whose answer would let you draft the bullet (which project, what they built or loaded, roughly when). Empty otherwise.' },
       bullet: { type: 'string', description: 'One CV bullet in the candidate’s own facts and numbers ONLY. Empty string if unsupported. For adjacent, state the related experience truthfully without claiming the exact tool. The bullet will be inserted under the role named in placement_role_line, so do not repeat that employer or client name inside the bullet.' },
       placement_role_line: { type: ['string', 'null'], description: 'The VERBATIM line from <cv> that heads the role (job title / employer or client / dates line) where this work actually happened, chosen from the candidate’s answer or, failing that, the role where it most plausibly fits. null if no role fits.' },
       explanation: { type: 'string', description: 'One or two sentences to the candidate explaining the verdict.' },
@@ -229,15 +230,19 @@ export function createAI(provider) {
       return { ...validateGapQuestions(raw), meta: { provider: provider.name, model: provider.model } };
     },
 
-    async gapBullet({ cv, requirement, questions, answers, otherGaps }) {
+    async gapBullet({ cv, requirement, questions, answers, otherGaps, finalRound = false }) {
       const qa = questions.map((q, i) => `Q: ${q}\nA: ${answers[i] || '(no answer)'}`).join('\n\n');
       const raw = await request(provider, {
         tool: GAP_BULLET_TOOL, tier: 'fast', cv,
-        task: `Requirement missing from the CV above: "${requirement.name}".\n\nThe candidate answered these questions. Decide whether their answers show real experience. If supported or adjacent, draft ONE CV bullet using only facts, tools and numbers that appear in their answers or the CV. Never upgrade "I read about it" or "I'd like to learn" into experience. A bare "Yes" with no detail is only usable if the CV itself already contains facts that support it (for example a question about regulated-sector experience and a CV listing government departments); then draft from those CV facts, otherwise return verdict unsupported and explain what detail would be needed. If unsupported, leave the bullet empty and offer a truthful learning_line instead. Always set placement_role_line to the exact role heading line from the CV where the bullet belongs (the employer or client the candidate names, else the best-fitting role); copy it character for character.\n\n<answers>\n${qa}\n</answers>`,
+        task: `Requirement missing from the CV above: "${requirement.name}".\n\nThe candidate answered these questions. Rules for the verdict:
+- A "Yes" with ANY detail is the candidate's own statement of fact. Do not second-guess it or demand more: draft ONE modest CV bullet from exactly what they said plus facts already in the CV. Do not add scale, duration or outcomes they did not give.
+- A bare "Yes" with no detail: if the CV already contains facts that support it (e.g. a question about regulated sectors and a CV listing government departments), draft from those CV facts. If the CV only names the skill in a list, return verdict needs_detail with ONE concrete follow_up question${finalRound ? ' — EXCEPT that this is the final round: you must now return supported, adjacent or unsupported, never needs_detail' : ''}.
+- Verdict unsupported only when they answered No, or their words say they have not done it ("read about it", "would like to learn"). Never upgrade those into experience.
+- If unsupported, leave the bullet empty and offer a truthful learning_line instead. Always set placement_role_line to the exact role heading line from the CV where the bullet belongs (the employer or client the candidate names, else the best-fitting role); copy it character for character.\n\n<answers>\n${qa}\n</answers>`,
         context: { cv, requirement, questions, answers },
         maxTokens: 1000,
       });
-      return { ...validateGapBullet(raw, { cv, answers, requirement: requirement.name, otherGaps }), meta: { provider: provider.name, model: provider.model } };
+      return { ...validateGapBullet(raw, { cv, answers, requirement: requirement.name, otherGaps, finalRound }), meta: { provider: provider.name, model: provider.model } };
     },
 
     async scanSummary({ cv, scan }) {

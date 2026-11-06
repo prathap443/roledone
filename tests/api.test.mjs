@@ -183,3 +183,15 @@ test('cache prefix (tools, system, CV block) is byte-identical across different 
   // Different tiers use different models, so their caches are separate — match is quality, the other two are fast.
   assert.equal(bodies[0].model, 'claude-sonnet-5-5'); assert.equal(bodies[1].model, 'claude-haiku-5-5');
 });
+
+test('gap bullet: a bare Yes on a listed-only skill gets one follow-up, then drafts on the final round', async () => {
+  const { call, close } = await serve({ ai: createAI(createMockProvider()) });
+  try {
+    const cv = 'JANE\nData Engineer, Co — 2020 to 2024\nBuilt pipelines.\nSkills: Snowflake, SQL';
+    const q = ['Have you used Snowflake?', 'What did you build?'];
+    const first = await (await call('/api/gap-bullet', { cv, requirement: { name: 'Snowflake' }, questions: q, answers: ['Yes.', 'No.'] })).json();
+    assert.equal(first.verdict, 'needs_detail'); assert.ok(first.follow_up);
+    const second = await (await call('/api/gap-bullet', { cv, requirement: { name: 'Snowflake' }, questions: [...q, first.follow_up], answers: ['Yes.', 'No.', 'Yes. Loaded retail sales data into Snowflake for a reporting project.'], finalRound: true })).json();
+    assert.equal(second.verdict, 'supported'); assert.match(second.bullet, /retail sales/);
+  } finally { await close(); }
+});

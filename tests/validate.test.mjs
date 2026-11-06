@@ -102,3 +102,15 @@ test('logistics are never requirements', () => {
   assert.ok(!isLogistics('Cloud security'));
   assert.ok(!isLogistics('Data pipeline availability monitoring'));
 });
+
+test('gap bullet: empty bullets never pass, needs_detail carries a follow-up and is final on round two', () => {
+  const base = { cv: sampleCV, requirement: 'Snowflake', answers: ['Yes.'], otherGaps: [] };
+  const empty = validateGapBullet({ verdict: 'supported', bullet: '', explanation: 'e', learning_line: '' }, base);
+  assert.equal(empty.verdict, 'unsupported'); assert.equal(empty.rejected, 'empty bullet');
+  const ask = validateGapBullet({ verdict: 'needs_detail', bullet: '', explanation: 'e', learning_line: '', follow_up: 'Which project?' }, base);
+  assert.equal(ask.verdict, 'needs_detail'); assert.equal(ask.follow_up, 'Which project?');
+  const noQ = validateGapBullet({ verdict: 'needs_detail', bullet: '', explanation: 'e', learning_line: '', follow_up: '' }, base);
+  assert.equal(noQ.verdict, 'unsupported');
+  const final = validateGapBullet({ verdict: 'needs_detail', bullet: '', explanation: 'e', learning_line: '', follow_up: 'Again?' }, { ...base, finalRound: true });
+  assert.equal(final.verdict, 'unsupported');
+});

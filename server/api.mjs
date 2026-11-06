@@ -105,7 +105,7 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
       const answers = (Array.isArray(body.answers) ? body.answers : []).slice(0, 4).map((a) => text(a, 2000, 'answer', { required: false }));
       if (!questions.length || !answers.some((a) => /^yes\b/i.test(a.trim()) || a.trim().length >= 10)) throw new HttpError(400, 'Answer Yes to at least one question, or add a sentence of detail.');
       const otherGaps = reqList(body.otherGaps).map((r) => r.name);
-      return send(res, 200, await ai.gapBullet({ cv, requirement, questions, answers, otherGaps }));
+      return send(res, 200, await ai.gapBullet({ cv, requirement, questions, answers, otherGaps, finalRound: body.finalRound === true }));
     }
     if (pathname === '/api/scan-summary') {
       const cv = text(body.cv, LIMITS.text, 'cv');

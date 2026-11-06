@@ -48,7 +48,7 @@ export const suggestions = ({ cv, draft, jd, requirements }) => request('/api/su
 export const feedback = ({ question, answer, cv }) => request('/api/feedback', { question, answer, cv });
 export const questions = ({ cv, jd, requirements, level, count }) => request('/api/questions', { cv, jd, requirements: requirements.map((r) => ({ name: r.name, status: r.status })), level, count });
 export const gapQuestions = ({ cv, jd, requirement }) => request('/api/gap-questions', { cv, jd, requirement: { name: requirement.name, source: requirement.source || '' } });
-export const gapBullet = ({ cv, requirement, questions, answers, otherGaps }) => request('/api/gap-bullet', { cv, requirement: { name: requirement.name }, questions, answers, otherGaps: otherGaps.map((r) => ({ name: r.name, status: r.status })) });
+export const gapBullet = ({ cv, requirement, questions, answers, otherGaps, finalRound = false }) => request('/api/gap-bullet', { cv, requirement: { name: requirement.name }, questions, answers, otherGaps: otherGaps.map((r) => ({ name: r.name, status: r.status })), finalRound });
 export const scanSummary = ({ cv, scan }) => request('/api/scan-summary', { cv, scan });
 
 /**

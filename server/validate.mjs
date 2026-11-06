@@ -177,13 +177,17 @@ export function validateGapQuestions(raw) {
  * Numbers must come from the answers or the CV; names of OTHER gap requirements are not allowed.
  * `verdict` says whether the answers actually support the requirement.
  */
-export function validateGapBullet(raw, { cv, answers, requirement, otherGaps = [] }) {
-  const verdict = ['supported', 'adjacent', 'unsupported'].includes(raw?.verdict) ? raw.verdict : 'unsupported';
+export function validateGapBullet(raw, { cv, answers, requirement, otherGaps = [], finalRound = false }) {
+  let verdict = ['supported', 'adjacent', 'needs_detail', 'unsupported'].includes(raw?.verdict) ? raw.verdict : 'unsupported';
   const bullet = asText(raw?.bullet, 600);
   const explanation = asText(raw?.explanation, LIMITS.note);
   const placement = raw?.placement_role_line ? locateSpan(asText(raw.placement_role_line, 200), cv) : null;
-  const result = { verdict, bullet: '', explanation, learning_line: asText(raw?.learning_line, 300), placement, rejected: null };
-  if (verdict === 'unsupported' || !bullet) return result;
+  const follow_up = asText(raw?.follow_up, LIMITS.question);
+  if (verdict === 'needs_detail' && (finalRound || !follow_up)) verdict = 'unsupported'; // never loop, never ask an empty question
+  const result = { verdict, bullet: '', explanation, learning_line: asText(raw?.learning_line, 300), placement, follow_up: verdict === 'needs_detail' ? follow_up : '', rejected: null };
+  if (verdict === 'needs_detail') return result;
+  if (verdict !== 'unsupported' && !bullet) { result.verdict = 'unsupported'; result.rejected = 'empty bullet'; return result; } // an "added" empty line is never acceptable
+  if (verdict === 'unsupported') return result;
   const sources = [cv, ...answers];
   const badNumbers = unsupportedNumbers(bullet, sources);
   if (badNumbers.length) { result.rejected = `unsupported numbers: ${badNumbers.join(', ')}`; result.verdict = 'unsupported'; return result; }
