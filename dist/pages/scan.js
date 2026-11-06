@@ -66,7 +66,7 @@ function report(scan) {
  <div><div class="eyebrow">NEXT STEPS</div><h3>Turn the score into a stronger CV.</h3></div>
  <div class="actions">
   <button class="primary" data-page="match">Compare to a job description →</button>
-  ${can('suggestions') ? '<button class="secondary" data-page="editor">Fix these in CV studio ✧</button>' : `<button class="secondary" data-upgrade>Fix these with the AI agent · ${esc(needs('suggestions'))}</button>`}
+  ${can('suggestions') ? '<button class="secondary" data-page="editor">Fix these in CV studio ✧</button><button class="secondary" data-page="templates">Put it in a template</button>' : `<button class="secondary" data-upgrade>Fix these with the AI agent · ${esc(needs('suggestions'))}</button>`}
  </div>
 </section>`;
 }

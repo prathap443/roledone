@@ -68,3 +68,45 @@ p{margin:0 0 5pt}ul{margin:0 0 6pt 14pt;padding:0}li{margin:0 0 2pt}
   w.document.close();
   setTimeout(() => { w.focus(); w.print(); }, 400);
 }
+
+// ---- Word export from the structured CV (single-column templates) ----
+const RIGHT_TAB = 9638; // page width 11906 − margins 2×1134 = 9638 twips
+const run = (text, { b, i, color, size, caps } = {}) => `<w:r><w:rPr>${b ? '<w:b/>' : ''}${i ? '<w:i/>' : ''}${caps ? '<w:caps/>' : ''}${color ? `<w:color w:val="${color}"/>` : ''}${size ? `<w:sz w:val="${size}"/>` : ''}</w:rPr><w:t xml:space="preserve">${xml(text)}</w:t></w:r>`;
+const p = (runs, { style, after = 80, before = 0, jc, tabRight, keepNext } = {}) => `<w:p><w:pPr>${style ? `<w:pStyle w:val="${style}"/>` : ''}${keepNext ? '<w:keepNext/>' : ''}${tabRight ? `<w:tabs><w:tab w:val="right" w:pos="${RIGHT_TAB}"/></w:tabs>` : ''}<w:spacing w:before="${before}" w:after="${after}"/>${jc ? `<w:jc w:val="${jc}"/>` : ''}</w:pPr>${runs}</w:p>`;
+const bullet = (text) => `<w:p><w:pPr><w:pStyle w:val="ListParagraph"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr><w:spacing w:after="40"/></w:pPr>${run(text)}</w:p>`;
+const TAB = '<w:r><w:tab/></w:r>';
+
+/** Build a styled .docx from the structured CV. `template` picks typography; sidebar layouts fall back to a single column. */
+export async function structuredDocxBlob(cv, template = 'standard', { JSZip = globalThis.JSZip } = {}) {
+  if (!JSZip) {
+    await new Promise((resolve, reject) => { const s = document.createElement('script'); s.src = '/vendor/jszip/jszip.min.js'; s.onload = resolve; s.onerror = () => reject(new Error('Could not load the document writer.')); document.head.appendChild(s); });
+    JSZip = globalThis.JSZip;
+  }
+  const T = { standard: { font: 'Georgia', accent: '1C3029', centred: true, headingCaps: false }, modern: { font: 'Calibri', accent: '1C3029', centred: false, headingCaps: true }, compact: { font: 'Calibri', accent: '2B2B2B', centred: false, headingCaps: true, tight: true }, minimal: { font: 'Calibri', accent: '476025', centred: false, headingCaps: true } }[template] || { font: 'Calibri', accent: '1C3029' };
+  const H = (text) => p(run(text, { b: true, color: T.accent, size: T.headingCaps ? 19 : 24, caps: T.headingCaps }), { style: 'Heading2', before: T.tight ? 160 : 240, after: 60, keepNext: true });
+  const parts = [];
+  parts.push(p(run(cv.name, { b: true, size: T.tight ? 32 : 40, color: T.accent }), { style: 'Title', after: 40, jc: T.centred ? 'center' : undefined }));
+  if (cv.headline) parts.push(p(run(cv.headline, { size: 22, color: '333333' }), { after: 60, jc: T.centred ? 'center' : undefined }));
+  const contact = [cv.contact.email, cv.contact.phone, cv.contact.location, ...cv.contact.links].filter(Boolean).join('   ·   ');
+  if (contact) parts.push(p(run(contact, { size: 18, color: '555555' }), { after: 120, jc: T.centred ? 'center' : undefined }));
+  if (cv.summary) parts.push(H('Professional Summary'), p(run(cv.summary), { after: 100 }));
+  if (cv.experience.length) {
+    parts.push(H('Experience'));
+    for (const r of cv.experience) {
+      const d = [r.start, r.end].filter(Boolean).join(' – ');
+      parts.push(p(run(r.title, { b: true }) + (r.employer ? run(` – ${r.employer}`) : '') + (d ? TAB + run(d, { i: true, color: '555555', size: 19 }) : ''), { after: 20, tabRight: true, keepNext: true }));
+      if (r.location) parts.push(p(run(r.location, { size: 18, color: '666666' }), { after: 40 }));
+      for (const b of r.bullets) parts.push(bullet(b));
+      parts.push(p('', { after: 60 }));
+    }
+  }
+  if (cv.education.length) { parts.push(H('Education')); for (const e of cv.education) parts.push(p(run(e.qualification, { b: true }) + (e.institution ? run(`, ${e.institution}`) : '') + (e.year ? TAB + run(e.year, { color: '555555', size: 19 }) : ''), { after: 60, tabRight: true })); }
+  if (cv.skills.length) parts.push(H('Skills'), p(run(cv.skills.join(' · ')), { after: 80 }));
+  if (cv.certifications.length) { parts.push(H('Certifications')); for (const c of cv.certifications) parts.push(bullet(c)); }
+  for (const x of cv.extras) { parts.push(H(x.heading)); for (const l of x.lines) parts.push(bullet(l)); }
+  const zip = new JSZip();
+  const all = files(parts.join(''));
+  all['word/styles.xml'] = all['word/styles.xml'].replace(/w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/, `w:ascii="${T.font}" w:hAnsi="${T.font}" w:cs="${T.font}"`).replace('<w:sz w:val="21"/>', `<w:sz w:val="${T.tight ? 19 : 21}"/>`);
+  for (const [path, content] of Object.entries(all)) zip.file(path, content);
+  return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', compression: 'DEFLATE' });
+}

@@ -71,3 +71,4 @@ export function generateQuestions({ level, count, force = false } = {}) {
     .finally(() => { session.questionsPending = null; });
   return session.questionsPending;
 }
+export const structure = ({ cv }) => request('/api/structure', { cv });

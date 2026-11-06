@@ -48,6 +48,10 @@ npm test
 
 Upload or paste a CV with no job description and get a 0–100 CV score with four explainable sub-scores computed in the browser (`dist/scan.js`): **Parse-ability** (contact details, standard headings, dates, bullets, length, single-column flow), **Impact** (share of achievement lines with a measurable outcome and a strong verb, minus weak openers), **Readability** (long sentences, passive voice, buzzwords) and **Role coverage** (mentions of a curated set of common requirements for the role family; Senior Data Engineer first). Each tile opens the rules and the CV lines behind the number. Claude writes the headline, strengths (each backed by a verbatim CV quote) and the three critical fixes; fixes are phrased "if you did this, show it", never "add this". Download as PDF via print.
 
+### Templates
+
+**Templates** (from CV studio or the scan report) shows four A4 layouts — Standard, Modern (sidebar), Compact, Minimal — with a live preview that is the exact page exported. The draft is first split into sections by rules (`dist/structure.js`), optionally tidied by the AI agent (`/api/structure`, every value validated as a verbatim quote of the draft), then rendered deterministically (`dist/templates.js`). Export PDF (print) for all four; Word for all four (Modern falls back to a single column in Word). No photo templates.
+
 ### Export in your own design
 
 When the CV was uploaded as a Word `.docx`, CV studio offers **Export Word · your design**: the draft is diffed against the extracted text line by line and written back into the original document (`dist/docx-edit.js`) — changed lines keep their paragraph's formatting, new bullets clone the neighbouring list item's style and numbering, deleted lines are removed. Fonts, colours, headings, tables and layout are untouched. The file never leaves the browser; it is kept in memory (and in IndexedDB only when device saving is on). Pasted or PDF sources fall back to the clean Word export.

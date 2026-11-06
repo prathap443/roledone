@@ -86,6 +86,10 @@ export function createMockProvider() {
           strengths: [{ text: 'Names the platforms actually used.', evidence: ls[1] || ls[0] }, { text: 'Fabricated evidence is dropped.', evidence: 'not in the cv' }],
           fixes: [{ text: 'If a bullet had a measurable outcome, add it.', why: 'Numbers are what a hiring manager remembers.', evidence: ls[2] || null }] };
       }
+      if (tool.name === 'structure_cv') {
+        const { structureCV } = await import('../../dist/structure.js');
+        return structureCV(context.cv);
+      }
       throw new Error(`mock provider: unknown tool ${tool.name}`);
     },
   };

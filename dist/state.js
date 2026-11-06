@@ -24,6 +24,8 @@ export const blank = () => ({
   questionLevel: 'technical',
   questionCount: 5,
   gaps: {},             // requirement id -> { questions, answers, result } from the Gap Interview
+  template: 'standard', // chosen CV template
+  structured: null,     // { hash, cv } structured form of the draft used by templates
   scan: null,           // CV-only scan result
   scanSummary: null,    // Claude's read of the scan
 });
@@ -86,7 +88,7 @@ export function setSources({ cv = state.cv, jd = state.jd, sourceDoc }) {
   state.jd = jd;
   if (cvChanged) {
     setSourceDoc(sourceDoc || null); // a pasted or re-uploaded CV no longer matches the old file
-    state.draft = null; state.suggestions = null; state.dismissed = []; state.applied = []; state.scan = null; state.scanSummary = null;
+    state.draft = null; state.suggestions = null; state.dismissed = []; state.applied = []; state.scan = null; state.scanSummary = null; state.structured = null;
   }
   if (cvChanged || jdChanged) { state.answers = {}; state.feedback = {}; state.requirements = null; state.matchMeta = null; state.questions = null; state.gaps = {}; session.question = 0; }
   save();

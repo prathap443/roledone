@@ -31,6 +31,7 @@ export function render() {
   <div class="actions">
    ${ai ? '<button class="primary lime" id="suggest">Suggest clearer wording ✧</button>' : ''}
    ${session.sourceDoc ? '<button class="secondary" id="export-original">Export Word · your design ↓</button><button class="text-button" id="export-docx">Clean Word ↓</button>' : `<button class="${ai ? 'secondary' : 'primary'}" id="export-docx">Export Word ↓</button>`}
+   <button class="secondary" data-page="templates">Choose a template →</button>
    <button class="secondary" id="export-pdf">Export PDF ↓</button>
    <button class="text-button" id="export">Plain text ↓</button>
    <button class="secondary" id="reset-draft">Restore original</button>

@@ -12,9 +12,10 @@ import * as match from './pages/match.js';
 import * as editor from './pages/editor.js';
 import * as interview from './pages/interview.js';
 import * as applications from './pages/applications.js';
+import * as templates from './pages/templates.js';
 
-const pages = { overview, scan, match, editor, interview, applications };
-const names = { overview: 'Overview', scan: 'CV scan', match: 'Role match', editor: 'CV studio', interview: 'Interview room', applications: 'Applications' };
+const pages = { overview, scan, match, editor, interview, applications, templates };
+const names = { overview: 'Overview', scan: 'CV scan', match: 'Role match', editor: 'CV studio', templates: 'Templates', interview: 'Interview room', applications: 'Applications' };
 
 setStorageErrorHandler(() => toast('Storage is unavailable. Your work remains in this tab.'));
 load();
@@ -45,7 +46,7 @@ function showPlans() {
 function render() {
   $('#breadcrumb').innerHTML = `Workspace <b>/ ${names[session.page]}</b>`;
   $$('nav button').forEach((b) => {
-    const active = b.dataset.page === session.page;
+    const active = b.dataset.page === session.page || (session.page === 'templates' && b.dataset.page === 'editor');
     b.classList.toggle('active', active);
     if (active) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });

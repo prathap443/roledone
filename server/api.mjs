@@ -113,6 +113,10 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
       if (!scan || typeof scan.score !== 'number' || !scan.parts?.coverage) throw new HttpError(400, 'scan result is required');
       return send(res, 200, await ai.scanSummary({ cv, scan }));
     }
+    if (pathname === '/api/structure') {
+      const cv = text(body.cv, LIMITS.text, 'cv');
+      return send(res, 200, await ai.structure({ cv }));
+    }
     if (pathname === '/api/feedback') {
       const question = text(body.question, LIMITS.question, 'question'), answer = text(body.answer, LIMITS.answer, 'answer'), cv = text(body.cv, LIMITS.text, 'cv', { required: false });
       if (answer.trim().split(/\s+/).length < 8) throw new HttpError(400, 'Write a few sentences before requesting a review.');

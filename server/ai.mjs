@@ -2,7 +2,7 @@
 // CV and JD text are untrusted input; they are wrapped in tags and the system prompt instructs
 // the model to treat them as data. Nothing leaves here without passing validate.mjs.
 
-import { validateMatch, validateSuggestions, validateFeedback, validateQuestions, validateGapQuestions, validateGapBullet, validateScanSummary } from './validate.mjs';
+import { validateMatch, validateSuggestions, validateFeedback, validateQuestions, validateGapQuestions, validateGapBullet, validateScanSummary, validateStructure } from './validate.mjs';
 
 const GROUNDING_RULES = `You are the analysis engine inside Roledone, a career studio for UK tech professionals.
 Non-negotiable rules:
@@ -155,7 +155,29 @@ const SCAN_TOOL = {
   },
 };
 
-const ALL_TOOLS = [MATCH_TOOL, SUGGEST_TOOL, FEEDBACK_TOOL, QUESTIONS_TOOL, GAP_QUESTIONS_TOOL, GAP_BULLET_TOOL, SCAN_TOOL];
+const STRUCTURE_TOOL = {
+  name: 'structure_cv',
+  description: 'Split the CV text into its parts. Copy every value VERBATIM from the text; do not rewrite, summarise or merge lines.',
+  input_schema: {
+    type: 'object', required: ['name', 'headline', 'contact', 'summary', 'experience', 'education', 'skills', 'certifications', 'extras'],
+    properties: {
+      name: { type: 'string' },
+      headline: { type: 'string', description: 'Job title line under the name, verbatim, or empty.' },
+      contact: { type: 'object', required: ['email', 'phone', 'location', 'links'], properties: { email: { type: 'string' }, phone: { type: 'string' }, location: { type: 'string' }, links: { type: 'array', items: { type: 'string' }, description: 'LinkedIn, GitHub, portfolio, as written.' } } },
+      summary: { type: 'string', description: 'The profile/summary paragraph(s) verbatim, or empty.' },
+      experience: { type: 'array', items: { type: 'object', required: ['title', 'employer', 'location', 'start', 'end', 'bullets'], properties: {
+        title: { type: 'string' }, employer: { type: 'string', description: 'Employer or client as written.' }, location: { type: 'string' },
+        start: { type: 'string', description: 'As written, e.g. "Jan 2022".' }, end: { type: 'string', description: 'As written, e.g. "Present".' },
+        bullets: { type: 'array', items: { type: 'string' }, description: 'Each achievement line or sentence verbatim, without the bullet character. Split paragraph roles into sentences.' } } } },
+      education: { type: 'array', items: { type: 'object', required: ['qualification', 'institution', 'year'], properties: { qualification: { type: 'string' }, institution: { type: 'string' }, year: { type: 'string' } } } },
+      skills: { type: 'array', items: { type: 'string' }, description: 'Individual skills as written, split on separators.' },
+      certifications: { type: 'array', items: { type: 'string' } },
+      extras: { type: 'array', items: { type: 'object', required: ['heading', 'lines'], properties: { heading: { type: 'string', description: 'Any other section heading, e.g. Projects, Publications, Architecture Frameworks.' }, lines: { type: 'array', items: { type: 'string' } } } } },
+    },
+  },
+};
+
+const ALL_TOOLS = [MATCH_TOOL, SUGGEST_TOOL, FEEDBACK_TOOL, QUESTIONS_TOOL, GAP_QUESTIONS_TOOL, GAP_BULLET_TOOL, SCAN_TOOL, STRUCTURE_TOOL];
 
 /**
  * Cache-friendly request: identical tool set and system prompt every time, CV first and cached,
@@ -260,6 +282,17 @@ export function createAI(provider) {
         maxTokens: 2000,
       });
       return { summary: validateScanSummary(raw, { cv }), meta: { provider: provider.name, model: provider.model } };
+    },
+
+    async structure({ cv }) {
+      const raw = await request(provider, {
+        tool: STRUCTURE_TOOL, tier: 'fast', cv,
+        task: 'Structure the CV above. Copy text verbatim: every title, employer, date, bullet, skill and sentence must appear character-for-character in the CV. Do not invent, reorder within a role, or drop achievement lines. Keep "References available upon request" and similar lines out.',
+        context: { cv },
+        maxTokens: 6000,
+      });
+      const { structured, dropped } = validateStructure(raw, { cv });
+      return { structured, meta: { provider: provider.name, model: provider.model, dropped } };
     },
 
     async feedback({ question, answer, cv }) {

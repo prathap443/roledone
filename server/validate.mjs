@@ -205,3 +205,34 @@ export function validateScanSummary(raw, { cv }) {
   const fixes = (Array.isArray(raw?.fixes) ? raw.fixes : []).map((x) => ({ ...item(x), why: asText(x?.why, LIMITS.note) })).filter((x) => x.text).slice(0, 3);
   return { headline: asText(raw?.headline, 220), strengths, fixes, target_role: asText(raw?.target_role, 80) };
 }
+
+/**
+ * Structured CV: every string must be a verbatim span of the source text (dates may be reformatted
+ * only if their digits all appear in the source). Anything else is dropped and counted.
+ */
+export function validateStructure(raw, { cv }) {
+  let dropped = 0;
+  const span = (v, max = 400) => { const t = asText(v, max); if (!t) return ''; const l = locateSpan(t, cv); if (!l) dropped++; return l || ''; };
+  const date = (v) => { const t = asText(v, 40); if (!t) return ''; if (locateSpan(t, cv)) return t; const digits = t.match(/\d+/g) || []; return digits.length && digits.every((d) => cv.includes(d)) ? t : (dropped++, ''); };
+  const list = (v, max, cap) => (Array.isArray(v) ? v : []).map((x) => span(x, max)).filter(Boolean).slice(0, cap);
+  const out = {
+    name: span(raw?.name, 80),
+    headline: span(raw?.headline, 160),
+    contact: {
+      email: span(raw?.contact?.email, 120), phone: span(raw?.contact?.phone, 40), location: span(raw?.contact?.location, 120),
+      links: list(raw?.contact?.links, 160, 4),
+    },
+    summary: span(raw?.summary, 1500),
+    experience: (Array.isArray(raw?.experience) ? raw.experience : []).map((r) => ({
+      title: span(r?.title, 120), employer: span(r?.employer, 120), location: span(r?.location, 80),
+      start: date(r?.start), end: date(r?.end) || (/present|current|date/i.test(asText(r?.end, 40)) ? asText(r?.end, 40) : ''),
+      bullets: list(r?.bullets, 600, 15),
+    })).filter((r) => r.title || r.employer).slice(0, 15),
+    education: (Array.isArray(raw?.education) ? raw.education : []).map((e) => ({ qualification: span(e?.qualification, 160), institution: span(e?.institution, 160), year: date(e?.year) }))
+      .filter((e) => e.qualification || e.institution).slice(0, 8),
+    skills: list(raw?.skills, 80, 60),
+    certifications: list(raw?.certifications, 200, 15),
+    extras: (Array.isArray(raw?.extras) ? raw.extras : []).map((x) => ({ heading: asText(x?.heading, 60), lines: list(x?.lines, 400, 12) })).filter((x) => x.heading && x.lines.length).slice(0, 6),
+  };
+  return { structured: out, dropped };
+}
