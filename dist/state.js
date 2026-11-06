@@ -2,8 +2,8 @@
 
 import { analyse } from './core.js';
 
-const KEY = 'rolewoven-v2';
-const LEGACY_KEY = 'rolewoven-v1';
+const KEY = 'roledone-v1';
+const LEGACY_KEYS = ['rolewoven-v2', 'rolewoven-v1']; // pre-rename workspaces are migrated on first load
 
 export const blank = () => ({
   cv: '',
@@ -19,7 +19,7 @@ export const blank = () => ({
   suggestions: null,    // AI suggestions for the current draft, or null
   dismissed: [],
   applied: [],
-  plan: null,           // null = server default (ROLEWOVEN_DEFAULT_PLAN); developer preview until accounts exist
+  plan: null,           // null = server default (ROLEDONE_DEFAULT_PLAN); developer preview until accounts exist
   questions: null,      // AI-written interview questions for this role
   questionLevel: 'technical',
   questionCount: 5,
@@ -36,11 +36,11 @@ export function setStorageErrorHandler(fn) { onStorageError = fn; }
 
 export function load() {
   try {
-    const raw = localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY);
+    const raw = localStorage.getItem(KEY) || LEGACY_KEYS.map((k) => localStorage.getItem(k)).find(Boolean);
     const saved = JSON.parse(raw || 'null');
     if (saved && typeof saved.cv === 'string' && typeof saved.jd === 'string' && Array.isArray(saved.applications)) {
       Object.assign(state, blank(), saved, { remember: true });
-      if (raw && !localStorage.getItem(KEY)) { localStorage.setItem(KEY, JSON.stringify(state)); localStorage.removeItem(LEGACY_KEY); }
+      if (raw && !localStorage.getItem(KEY)) { localStorage.setItem(KEY, JSON.stringify(state)); LEGACY_KEYS.forEach((k) => localStorage.removeItem(k)); }
     }
   } catch { /* storage unavailable or corrupt: start fresh */ }
 }
@@ -51,7 +51,7 @@ export function save() {
 }
 
 export function forget() {
-  try { localStorage.removeItem(KEY); localStorage.removeItem(LEGACY_KEY); } catch { /* ignore */ }
+  try { localStorage.removeItem(KEY); LEGACY_KEYS.forEach((k) => localStorage.removeItem(k)); } catch { /* ignore */ }
 }
 
 export function reset() {

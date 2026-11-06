@@ -20,7 +20,7 @@ export function render() {
   }
   if (!can('questions')) {
     return heading('03 / GET READY', 'Preparation, without the pressure.', 'Questions written for this role and this CV.')
-      + `<section class="panel">${locked({ plan: needs('questions'), title: 'Interview questions written for this role', body: `${api.aiAvailable() ? api.providerLabel() : 'Rolewoven'} writes questions from the actual requirements and your actual CV: depth on what you have, honest probes on what is missing, and a behavioural question from the advert. Then reviews your answers for structure.` })}</section>`;
+      + `<section class="panel">${locked({ plan: needs('questions'), title: 'Interview questions written for this role', body: `${api.aiAvailable() ? api.providerLabel() : 'Roledone'} writes questions from the actual requirements and your actual CV: depth on what you have, honest probes on what is missing, and a behavioural question from the advert. Then reviews your answers for structure.` })}</section>`;
   }
   const ai = api.aiAvailable();
   const qs = questionSet();

@@ -1,4 +1,4 @@
-// Client for the Rolewoven server API. Consent is checked before any CV text leaves the browser.
+// Client for the Roledone server API. Consent is checked before any CV text leaves the browser.
 
 import { state, session, save } from './state.js';
 import { modal, closeModal, $ } from './ui.js';
@@ -8,7 +8,7 @@ async function request(path, body) {
   try {
     res = await fetch(path, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : undefined);
   } catch {
-    throw new Error('Could not reach the Rolewoven server. Check your connection and try again.');
+    throw new Error('Could not reach the Roledone server. Check your connection and try again.');
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
@@ -30,7 +30,7 @@ export function ensureConsent() {
   if (state.aiConsent) return Promise.resolve(true);
   return new Promise((resolve) => {
     modal(`<div class="eyebrow">BEFORE WE CONTINUE</div><h2>Send your text for analysis?</h2>
-<p>Your CV and job description text will be sent to the Rolewoven server and processed by ${processorName()} to produce this result. Rolewoven does not store your documents; the provider processes them only to produce the result, under the terms in our privacy policy.</p>
+<p>Your CV and job description text will be sent to the Roledone server and processed by ${processorName()} to produce this result. Roledone does not store your documents; the provider processes them only to produce the result, under the terms in our privacy policy.</p>
 <p>Review every suggestion. The AI can only quote and rephrase what you wrote — it is blocked from adding numbers, tools or claims that are not already in your CV.</p>
 <label class="field"><span><input type="checkbox" id="consent-remember" checked> Don’t ask again in this workspace</span></label>
 <div class="actions"><button class="primary" id="consent-yes">Continue</button><button class="secondary" id="consent-no">Not now</button></div>`);

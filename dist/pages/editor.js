@@ -63,10 +63,10 @@ export function bind({ rebind }) {
   const draftArea = $('#draft');
   if (!draftArea) return;
   draftArea.addEventListener('input', (e) => setDraft(e.target.value));
-  $('#export').onclick = () => download('rolewoven-cv.txt', draftArea.value, 'text/plain');
+  $('#export').onclick = () => download('roledone-cv.txt', draftArea.value, 'text/plain');
   $('#export-docx').onclick = (e) => busy(e.currentTarget, 'Building…', async () => {
     const blob = await toDocxBlob(draftArea.value);
-    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'rolewoven-cv.docx'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'roledone-cv.docx'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast('Word document ready. Check headings and bullets once in Word.');
   });
   $('#export-pdf').onclick = () => { try { printCV(draftArea.value); toast('Choose “Save as PDF” in the print dialog.'); } catch (error) { toast(error.message); } };

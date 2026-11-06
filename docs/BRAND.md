@@ -1,16 +1,16 @@
-# Rolewoven — working identity
+# Roledone — working identity
 
 ## Meaning
 
-A career is built from many threads: projects, decisions, skills, and outcomes. Rolewoven connects them into a coherent story for the next role. Pronunciation: “role-woh-vuhn”.
+A career is built from many threads: projects, decisions, skills, and outcomes. Roledone connects them into a coherent story for the next role. Pronunciation: “role-woh-vuhn”.
 
 Tagline: **Real experience. A clearer story.**
 
 ## Domain shortlist
 
-1. rolewoven.com
-2. rolewoven.co.uk
-3. getrolewoven.com
+1. roledone.com
+2. roledone.co.uk
+3. getroledone.com
 
 These are candidates, not verified available domains. An initial exact-name web search on 5 November 2026 found no obvious career-product collision; search is not a domain-registration or trademark clearance check. Confirm availability with your registrar before purchasing and check relevant brand registers before committing commercially.
 

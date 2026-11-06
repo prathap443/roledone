@@ -26,7 +26,7 @@ export function render() {
  </div></section>
  <section><div class="section-heading"><h2>A thought for your next move</h2><span>THE CAREER NOTE</span></div><div class="panel insight"><span class="small-caps">LESS POLISH. MORE PROOF.</span><h3>The strongest thing on your CV is something you actually did.</h3><p>Start with the problem. Show your contribution. Finish with an outcome you can explain.</p><button class="text-button" data-page="editor">Bring your experience into focus ↗</button></div></section>
 </div>
-<div class="bottom-note">◇ ${aiAvailable() ? `${providerLabel()} analysis is available. Your text is only sent when you ask for it, and never stored by Rolewoven.` : 'Your CV stays in this tab unless you choose to save it on this device. No AI requests are sent.'}</div>`;
+<div class="bottom-note">◇ ${aiAvailable() ? `${providerLabel()} analysis is available. Your text is only sent when you ask for it, and never stored by Roledone.` : 'Your CV stays in this tab unless you choose to save it on this device. No AI requests are sent.'}</div>`;
 }
 
 export function bind({ loadSample }) {

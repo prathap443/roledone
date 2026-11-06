@@ -6,7 +6,7 @@ Import the Git repository or upload the project directory into a Node.js project
 
 ## Suggested next development brief
 
-> Continue the supplied Rolewoven repository. Read README.md and docs/PRODUCT.md first. Preserve the ivory/ink/lime design and responsive mobile navigation. Implement secure PDF/DOCX text extraction with a user review step before matching. Keep existing TXT and paste flows. Add a server API with explicit upload size/type limits and do not store CVs publicly. Keep AI disconnected until a server-side provider key and structured evidence contract are configured. Never invent candidate achievements. Run existing tests and add parser-specific tests for malformed, scanned, and oversized files. Report which capabilities are real and which remain prototypes.
+> Continue the supplied Roledone repository. Read README.md and docs/PRODUCT.md first. Preserve the ivory/ink/lime design and responsive mobile navigation. Implement secure PDF/DOCX text extraction with a user review step before matching. Keep existing TXT and paste flows. Add a server API with explicit upload size/type limits and do not store CVs publicly. Keep AI disconnected until a server-side provider key and structured evidence contract are configured. Never invent candidate achievements. Run existing tests and add parser-specific tests for malformed, scanned, and oversized files. Report which capabilities are real and which remain prototypes.
 
 ## Collaboration rules
 

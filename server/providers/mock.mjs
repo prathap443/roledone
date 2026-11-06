@@ -1,6 +1,6 @@
 // Deterministic offline provider for tests and local development without an API key.
 // It reuses the browser's rule-based matcher so results are plausible but never "intelligent".
-// It is only selected when ROLEWOVEN_PROVIDER=mock is set explicitly; /api/status reports it.
+// It is only selected when ROLEDONE_PROVIDER=mock is set explicitly; /api/status reports it.
 
 import { analyse } from '../../dist/core.js';
 

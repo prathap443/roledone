@@ -1,4 +1,4 @@
-# Rolewoven
+# Roledone
 
 **Real experience. A clearer story.**
 
@@ -21,8 +21,8 @@ Open http://localhost:3000 locally (Replit uses port 5000 via `.replit`). Set `P
 | `ANTHROPIC_MODEL` | Quality tier for role match and CV suggestions. Defaults to `claude-sonnet-5-5`. |
 | `ANTHROPIC_MODEL_FAST` | Fast tier for Gap Interview, questions, answer review and scan summary. Defaults to `claude-haiku-5-5` (about 20× cheaper). |
 | `ANTHROPIC_EFFORT` | Thinking effort on Claude 5.x: `low` (default), `medium`, `high`. |
-| `ROLEWOVEN_DEFAULT_PLAN` | `free` (default), `pro` or `premium` — plan every visitor gets until accounts exist. |
-| `ROLEWOVEN_PROVIDER` | `anthropic`, `mock` (offline, rule-based, for development) or `off`. Defaults to `anthropic` when a key is set. |
+| `ROLEDONE_DEFAULT_PLAN` | `free` (default), `pro` or `premium` — plan every visitor gets until accounts exist. |
+| `ROLEDONE_PROVIDER` | `anthropic`, `mock` (offline, rule-based, for development) or `off`. Defaults to `anthropic` when a key is set. |
 
 ```sh
 npm run check

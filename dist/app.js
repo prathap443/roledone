@@ -1,4 +1,4 @@
-// Rolewoven app shell: routing, navigation, workspace settings, and the AI status indicator.
+// Roledone app shell: routing, navigation, workspace settings, and the AI status indicator.
 // Pages live in ./pages/*.js; shared state in ./state.js; server calls in ./api.js.
 
 import { sampleCV, sampleJD } from './core.js';
@@ -73,10 +73,10 @@ async function loadSample() {
   toast('Fictional sample loaded. Try the comparison.');
 }
 
-$('#help').onclick = () => modal(`<div class="eyebrow">ROLEWOVEN / EARLY ACCESS</div><h2>Real experience. A clearer story.</h2>
+$('#help').onclick = () => modal(`<div class="eyebrow">ROLEDONE / EARLY ACCESS</div><h2>Real experience. A clearer story.</h2>
 <p>Match a role, edit your CV, practise interview answers, and track applications.</p>
 <p>${aiAvailable()
-    ? `AI analysis is provided by ${esc(providerLabel())}. It reads your text only when you press an AI button, must quote your own CV for every claim, and is blocked from inventing numbers, tools, or achievements. Rolewoven does not store your documents.`
+    ? `AI analysis is provided by ${esc(providerLabel())}. It reads your text only when you press an AI button, must quote your own CV for every claim, and is blocked from inventing numbers, tools, or achievements. Roledone does not store your documents.`
     : 'No AI provider is configured on this server, so matching and feedback use simple local rules.'}</p>
 <p>Import PDF, DOCX, or TXT files up to 10 MB; export edited CVs as TXT. Scanned PDFs need OCR first. Your content stays in this tab unless you enable device saving.</p>`);
 
@@ -90,7 +90,7 @@ ${aiAvailable() ? `<label class="field"><span><input type="checkbox" id="consent
   $('#remember').onchange = (e) => { state.remember = e.target.checked; if (!state.remember) forget(); save(); toast(state.remember ? 'Device saving enabled.' : 'Device saving disabled.'); };
   $('#consent') && ($('#consent').onchange = (e) => { state.aiConsent = e.target.checked; save(); });
   $('#plan').onchange = (e) => { state.plan = e.target.value || null; save(); render(); toast(`${PLANS[plan()].label} plan (preview).`); };
-  $('#export-workspace').onclick = () => download('rolewoven-workspace.json', JSON.stringify(state, null, 2), 'application/json');
+  $('#export-workspace').onclick = () => download('roledone-workspace.json', JSON.stringify(state, null, 2), 'application/json');
   $('#clear-workspace').onclick = async () => {
     closeModal();
     if (await confirm({ title: 'Clear all workspace data?', body: 'This removes the CV, draft, practice answers, suggestions, and application records from this tab and this browser’s saved workspace. Export a copy first if needed.', action: 'Clear everything' })) {
