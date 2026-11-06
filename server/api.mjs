@@ -84,7 +84,8 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
     if (pathname === '/api/questions') {
       const cv = text(body.cv, LIMITS.text, 'cv'), jd = text(body.jd, LIMITS.text, 'jd');
       const level = ['screening', 'technical', 'senior'].includes(body.level) ? body.level : 'technical';
-      return send(res, 200, await ai.questions({ cv, jd, requirements: reqList(body.requirements), level }));
+      const count = [5, 10, 25].includes(Number(body.count)) ? Number(body.count) : 5;
+      return send(res, 200, await ai.questions({ cv, jd, requirements: reqList(body.requirements), level, count }));
     }
     if (pathname === '/api/gap-questions') {
       const cv = text(body.cv, LIMITS.text, 'cv'), jd = text(body.jd, LIMITS.text, 'jd', { required: false });

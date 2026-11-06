@@ -33,10 +33,14 @@ export function render() {
     : 'Practice mode: questions use templates and feedback uses a structure checklist. Technical accuracy, confidence, and hiring readiness are not assessed.'}</div>
 <section class="panel">
  ${ai ? `<div class="question-toolbar">
-  <label class="field inline">Interview stage<select id="level">${Object.entries(LEVELS).map(([k, v]) => `<option value="${k}" ${state.questionLevel === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+  <div class="toolbar-fields">
+   <label class="field inline">Interview stage<select id="level">${Object.entries(LEVELS).map(([k, v]) => `<option value="${k}" ${state.questionLevel === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+   <label class="field inline">How many<select id="count">${[5, 10, 25].map((n) => `<option value="${n}" ${Number(state.questionCount) === n ? 'selected' : ''}>${n} questions${n === 25 ? ' (full round)' : ''}</option>`).join('')}</select></label>
+  </div>
   <button class="${state.questions ? 'secondary' : 'primary lime'}" id="generate">${state.questions ? 'Write a new set ✧' : 'Write questions for this role ✧'}</button>
  </div>` : ''}
- <div class="question-dots" aria-label="Choose a question">${qs.map((_, i) => `<button data-question="${i}" class="${i === q ? 'selected' : ''} ${state.answers[i]?.trim() ? 'answered' : ''}" aria-label="Question ${i + 1}" ${i === q ? 'aria-current="step"' : ''}>${i + 1}</button>`).join('')}</div>
+ <div class="question-dots ${qs.length > 10 ? 'dense' : ''}" aria-label="Choose a question">${qs.map((x, i) => `<button data-question="${i}" class="${i === q ? 'selected' : ''} ${state.answers[i]?.trim() ? 'answered' : ''}" aria-label="Question ${i + 1}: ${esc(x.type)}" title="${esc(TYPE_LABEL[x.type] || '')}${x.focus ? ' · ' + esc(x.focus) : ''}" ${i === q ? 'aria-current="step"' : ''}>${i + 1}</button>`).join('')}</div>
+ ${qs.length > 5 ? `<p class="hint progress">${Object.values(state.answers).filter((a) => a?.trim()).length} of ${qs.length} answered · ${['depth', 'scenario', 'gap', 'behavioural'].map((t) => `${qs.filter((x) => x.type === t).length} ${TYPE_LABEL[t].toLowerCase()}`).join(' · ')}</p>` : ''}
  <span class="question-number">QUESTION ${String(q + 1).padStart(2, '0')} / ${String(qs.length).padStart(2, '0')}${cur.type ? ` · ${TYPE_LABEL[cur.type]}` : ''}${cur.focus ? ` · ${esc(cur.focus.toUpperCase())}` : ''}</span>
  <h2 class="question-title">${esc(cur.prompt)}</h2>
  ${cur.why ? `<p class="hint why">${esc(cur.why)}</p>` : ''}
@@ -71,12 +75,14 @@ export function bind({ render: rerender }) {
   $('#next-question')?.addEventListener('click', () => { session.question = (q + 1) % qs.length; rerender(); });
   $('#answer')?.addEventListener('input', (e) => { state.answers[q] = e.target.value; save(); });
   $('#level')?.addEventListener('change', (e) => { state.questionLevel = e.target.value; save(); });
+  $('#count')?.addEventListener('change', (e) => { state.questionCount = Number(e.target.value); save(); });
 
   $('#generate')?.addEventListener('click', async (e) => {
     const button = e.currentTarget;
     if (!(await api.ensureConsent())) return;
-    await busy(button, 'Writing questions…', async () => {
-      const result = await api.questions({ cv: state.cv, jd: state.jd, requirements: requirements(), level: state.questionLevel });
+    const count = Number(state.questionCount) || 5;
+    await busy(button, count > 10 ? 'Writing a full round, this takes a moment…' : 'Writing questions…', async () => {
+      const result = await api.questions({ cv: state.cv, jd: state.jd, requirements: requirements(), level: state.questionLevel, count });
       if (!result.questions.length) { toast('No questions came back. Try again.'); return; }
       state.questions = result.questions; state.answers = {}; state.feedback = {}; session.question = 0; save();
       rerender();

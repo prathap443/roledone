@@ -138,12 +138,15 @@ export function validateFeedback(raw) {
 }
 
 /** Generated interview questions: shape, caps, and no empty prompts. */
-export function validateQuestions(raw, { requirements = [] } = {}) {
+export function validateQuestions(raw, { requirements = [], count = 5 } = {}) {
   const names = new Set(requirements.map((r) => normalise(r.name)));
   const TYPES = new Set(['depth', 'gap', 'behavioural', 'scenario']);
-  const out = [];
+  const out = [], seen = new Set();
   for (const q of Array.isArray(raw?.questions) ? raw.questions : []) {
-    if (out.length >= 8) break;
+    if (out.length >= Math.min(25, Math.max(5, count))) break;
+    const key = normalise(q?.prompt).slice(0, 60);
+    if (seen.has(key)) continue;
+    seen.add(key);
     const prompt = asText(q?.prompt, LIMITS.question);
     if (prompt.length < 15) continue;
     const focus = asText(q?.focus, 80);

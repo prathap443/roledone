@@ -96,7 +96,7 @@ const QUESTIONS_TOOL = {
   description: 'Write interview questions tailored to this role and this candidate.',
   input_schema: {
     type: 'object', required: ['questions'],
-    properties: { questions: { type: 'array', minItems: 5, maxItems: 6, items: {
+    properties: { questions: { type: 'array', minItems: 5, maxItems: 25, items: {
       type: 'object', required: ['prompt', 'type', 'focus', 'why', 'listen_for'],
       properties: {
         prompt: { type: 'string', description: 'The question as an interviewer would ask it. Specific to the CV and role, not generic.' },
@@ -186,16 +186,17 @@ export function createAI(provider) {
       return { suggestions, meta: { provider: provider.name, model: provider.model, rejected: rejected.length } };
     },
 
-    async questions({ cv, jd, requirements, level = 'technical' }) {
+    async questions({ cv, jd, requirements, level = 'technical', count = 5 }) {
       const list = requirements.map((r) => `- ${r.name} [${r.status}]`).join('\n');
+      const depth = Math.round(count * 0.4), gap = Math.round(count * 0.25), behavioural = Math.max(1, Math.round(count * 0.15)), scenario = count - depth - gap - behavioural;
       const raw = await provider.complete({
         system: GROUNDING_RULES,
-        user: `Write 5 interview questions for this candidate and role at ${level === 'screening' ? 'recruiter screening' : level === 'senior' ? 'senior panel' : 'technical interview'} level.\n\nMix: 2 depth questions on requirements marked evidence (reference the candidate's actual projects or tools from the CV), 1–2 gap questions on requirements marked gap or partial (how they would approach it, where they would need support), 1 behavioural question from a responsibility in the JD, and optionally 1 scenario. Every question must be specific to this CV and JD; no generic "tell me about yourself".\n\nRequirements:\n${list}\n\n${wrap('jd', jd)}\n\n${wrap('cv', cv)}`,
+        user: `Write exactly ${count} interview questions for this candidate and role at ${level === 'screening' ? 'recruiter screening' : level === 'senior' ? 'senior panel' : 'technical interview'} level.\n\nMix: ${depth} depth questions on requirements marked evidence (reference the candidate's actual projects or tools from the CV; cover as many different evidenced requirements as possible rather than repeating one), ${gap} gap questions on requirements marked gap or partial (how they would approach it, where they would need support), ${behavioural} behavioural question${behavioural > 1 ? 's' : ''} from responsibilities in the JD, and ${scenario} realistic scenario question${scenario === 1 ? '' : 's'} from the role's day-to-day. Order them as an interviewer would: warm-up, depth, scenarios, gaps, behavioural. No two questions may test the same thing. Every question must be specific to this CV and JD; no generic "tell me about yourself".\n\nRequirements:\n${list}\n\n${wrap('jd', jd)}\n\n${wrap('cv', cv)}`,
         tool: QUESTIONS_TOOL,
-        context: { cv, jd, requirements, level },
-        maxTokens: 3000,
+        context: { cv, jd, requirements, level, count },
+        maxTokens: 1200 + 320 * count,
       });
-      return { ...validateQuestions(raw, { requirements }), meta: { provider: provider.name, model: provider.model, level } };
+      return { ...validateQuestions(raw, { requirements, count }), meta: { provider: provider.name, model: provider.model, level, count } };
     },
 
     async gapQuestions({ cv, jd, requirement }) {

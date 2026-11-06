@@ -137,3 +137,7 @@ dialog:has(.plan-table){max-width:640px}
 .yesno button.on{background:var(--ink);color:var(--lime);border-color:var(--ink)}
 .gap-q textarea.hidden{display:none}
 .gap-q textarea{min-height:56px}
+.toolbar-fields{display:flex;gap:12px;flex-wrap:wrap}
+.question-dots{flex-wrap:wrap}
+.question-dots.dense button{width:34px;height:34px;font-size:12px}
+.hint.progress{margin:-8px 0 16px}
