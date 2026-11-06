@@ -73,7 +73,7 @@ export function createMockProvider() {
         return { intro: `The advert asks for ${context.requirement.name}.`, questions: [`Have you used ${context.requirement.name} or an equivalent tool? Where?`, 'What did you build or change with it, and what was the outcome?'] };
       }
       if (tool.name === 'draft_bullet') {
-        const joined = context.answers.filter((a) => !/^no\.?$/i.test(a.trim())).join(' ');
+        const joined = context.answers.filter((a) => !/^no\.?$/i.test(a.trim())).map((a) => a.replace(/\(no further detail[^)]*\)/i, '')).join(' ');
         if (!joined || (/\b(no|never|not really|haven't|have not)\b/i.test(joined) && joined.length < 80)) return { verdict: 'unsupported', bullet: '', explanation: 'Your answers do not describe hands-on experience.', learning_line: `Currently learning ${context.requirement.name}.` };
         const detail = context.answers.filter((a) => /^yes\b/i.test(a.trim())).map((a) => a.replace(/^yes\.?\s*/i, '').replace(/\(no further detail[^)]*\)/i, '').trim()).find(Boolean) || '';
         if (!detail && !/\bgovernment\b/i.test(context.cv)) return { verdict: 'needs_detail', bullet: '', explanation: 'A bare yes.', learning_line: '', placement_role_line: null, follow_up: `Which project did you use ${context.requirement.name} on, and what did you do with it?` };
