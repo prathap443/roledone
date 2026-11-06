@@ -136,7 +136,7 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
     if (!quota.allowed) throw new HttpError(429, 'Too many requests. Try again in a few minutes.');
 
     const required = REQUIRED_PLAN[pathname];
-    if (required) {
+    if (required && billing) { // without billing there is nothing to buy, so nothing to gate
       const { plan } = await planFor(req);
       if ((RANK_FALLBACK[plan] ?? 0) < RANK_FALLBACK[required]) throw new HttpError(402, `This needs the ${required[0].toUpperCase() + required.slice(1)} plan.`);
     }

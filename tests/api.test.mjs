@@ -20,7 +20,7 @@ async function serve(options) {
 test('status reports browser-only mode and POST endpoints return 503 when AI is off', async () => {
   const { call, close } = await serve({ ai: createAI(null) });
   try {
-    assert.deepEqual(await (await call('/api/status')).json(), { ai: false, provider: null, model: null, defaultPlan: 'free' });
+    assert.deepEqual(await (await call('/api/status')).json(), { ai: false, provider: null, model: null, defaultPlan: 'free', billing: false, plans: [] });
     const res = await call('/api/match', { cv: 'a', jd: 'b' });
     assert.equal(res.status, 503);
     assert.match((await res.json()).error, /ANTHROPIC_API_KEY/);
