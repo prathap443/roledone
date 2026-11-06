@@ -124,10 +124,11 @@ const GAP_BULLET_TOOL = {
   name: 'draft_bullet',
   description: 'Decide whether the candidate’s answers support the requirement and, if so, draft one CV bullet from their answers.',
   input_schema: {
-    type: 'object', required: ['verdict', 'bullet', 'explanation', 'learning_line'],
+    type: 'object', required: ['verdict', 'bullet', 'explanation', 'learning_line', 'placement_role_line'],
     properties: {
       verdict: { type: 'string', enum: ['supported', 'adjacent', 'unsupported'], description: 'supported = answers show direct experience; adjacent = related experience worth stating honestly; unsupported = no real experience described.' },
-      bullet: { type: 'string', description: 'One CV bullet in the candidate’s own facts and numbers ONLY. Empty string if unsupported. For adjacent, state the related experience truthfully without claiming the exact tool.' },
+      bullet: { type: 'string', description: 'One CV bullet in the candidate’s own facts and numbers ONLY. Empty string if unsupported. For adjacent, state the related experience truthfully without claiming the exact tool. The bullet will be inserted under the role named in placement_role_line, so do not repeat that employer or client name inside the bullet.' },
+      placement_role_line: { type: ['string', 'null'], description: 'The VERBATIM line from <cv> that heads the role (job title / employer or client / dates line) where this work actually happened, chosen from the candidate’s answer or, failing that, the role where it most plausibly fits. null if no role fits.' },
       explanation: { type: 'string', description: 'One or two sentences to the candidate explaining the verdict.' },
       learning_line: { type: 'string', description: 'If unsupported or adjacent: a truthful one-line way to mention it as a current learning goal, or empty.' },
     },
@@ -214,7 +215,7 @@ export function createAI(provider) {
       const qa = questions.map((q, i) => `Q: ${q}\nA: ${answers[i] || '(no answer)'}`).join('\n\n');
       const raw = await provider.complete({
         system: GROUNDING_RULES,
-        user: `Requirement missing from the CV: "${requirement.name}".\n\nThe candidate answered these questions. Decide whether their answers show real experience. If supported or adjacent, draft ONE CV bullet using only facts, tools and numbers that appear in their answers or the CV. Never upgrade "I read about it" or "I'd like to learn" into experience. A bare "Yes" with no detail is only usable if the CV itself already contains facts that support it (for example a question about regulated-sector experience and a CV listing government departments); then draft from those CV facts, otherwise return verdict unsupported and explain what detail would be needed. If unsupported, leave the bullet empty and offer a truthful learning_line instead.\n\n<answers>\n${qa}\n</answers>\n\n${wrap('cv', cv)}`,
+        user: `Requirement missing from the CV: "${requirement.name}".\n\nThe candidate answered these questions. Decide whether their answers show real experience. If supported or adjacent, draft ONE CV bullet using only facts, tools and numbers that appear in their answers or the CV. Never upgrade "I read about it" or "I'd like to learn" into experience. A bare "Yes" with no detail is only usable if the CV itself already contains facts that support it (for example a question about regulated-sector experience and a CV listing government departments); then draft from those CV facts, otherwise return verdict unsupported and explain what detail would be needed. If unsupported, leave the bullet empty and offer a truthful learning_line instead. Always set placement_role_line to the exact role heading line from the CV where the bullet belongs (the employer or client the candidate names, else the best-fitting role); copy it character for character.\n\n<answers>\n${qa}\n</answers>\n\n${wrap('cv', cv)}`,
         tool: GAP_BULLET_TOOL,
         context: { cv, requirement, questions, answers },
         maxTokens: 1200,

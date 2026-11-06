@@ -177,7 +177,8 @@ export function validateGapBullet(raw, { cv, answers, requirement, otherGaps = [
   const verdict = ['supported', 'adjacent', 'unsupported'].includes(raw?.verdict) ? raw.verdict : 'unsupported';
   const bullet = asText(raw?.bullet, 600);
   const explanation = asText(raw?.explanation, LIMITS.note);
-  const result = { verdict, bullet: '', explanation, learning_line: asText(raw?.learning_line, 300), rejected: null };
+  const placement = raw?.placement_role_line ? locateSpan(asText(raw.placement_role_line, 200), cv) : null;
+  const result = { verdict, bullet: '', explanation, learning_line: asText(raw?.learning_line, 300), placement, rejected: null };
   if (verdict === 'unsupported' || !bullet) return result;
   const sources = [cv, ...answers];
   const badNumbers = unsupportedNumbers(bullet, sources);

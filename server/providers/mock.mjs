@@ -76,7 +76,8 @@ export function createMockProvider() {
         const joined = context.answers.filter((a) => !/^no\.?$/i.test(a.trim())).join(' ');
         if (!joined || (/\b(no|never|not really|haven't|have not)\b/i.test(joined) && joined.length < 80)) return { verdict: 'unsupported', bullet: '', explanation: 'Your answers do not describe hands-on experience.', learning_line: `Currently learning ${context.requirement.name}.` };
         const detail = context.answers.find((a) => /^yes\b/i.test(a.trim()))?.replace(/^yes\.?\s*/i, '').replace(/\(no further detail[^)]*\)/i, '').trim() || context.answers[0].trim();
-        return { verdict: 'supported', bullet: `Used ${context.requirement.name}: ${detail || 'as shown in the CV'}`, explanation: 'Drafted from your answer.', learning_line: '' };
+        const roleLine = sentences(context.cv).find((l) => /\b(19[89]\d|20[0-4]\d)\b/.test(l) && l.split(/\s+/).length <= 16) || null;
+        return { verdict: 'supported', bullet: `Used ${context.requirement.name}: ${detail || 'as shown in the CV'}`, explanation: 'Drafted from your answer.', learning_line: '', placement_role_line: roleLine };
       }
       if (tool.name === 'summarise_scan') {
         const ls = sentences(context.cv);

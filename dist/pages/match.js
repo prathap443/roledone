@@ -4,6 +4,7 @@ import { $, $$, esc, heading, toast, busy, pill, locked } from '../ui.js';
 import { extractCV } from '../import-cv.js';
 import { can, needs } from '../plans.js';
 import * as api from '../api.js';
+import { placeBullet, placeLearningLine } from '../place.js';
 
 export function render() {
   const ai = api.aiAvailable();
@@ -80,9 +81,9 @@ function gapInterview(r, gap) {
   if (!gap) return `<div class="gap-cta"><span>Have this experience but never wrote it down?</span><button class="secondary" data-gap-start="${r.id}">Answer two quick questions ✧</button></div>`;
   if (gap.result) {
     const res = gap.result;
-    if (res.added) return `<div class="gap-done">✓ Added to your CV draft: <em>${esc(res.bullet)}</em></div>`;
+    if (res.added) return `<div class="gap-done">✓ Added ${res.where ? `under <strong>${esc(res.where)}</strong>` : 'to your CV draft'}: <em>${esc(res.bullet || res.learning_line)}</em></div>`;
     if (res.verdict === 'unsupported') return `<div class="gap-result unsupported"><strong>Not enough to claim it — and that is fine.</strong><p>${esc(res.explanation)}</p>${res.learning_line ? `<p class="hint">Truthful alternative: “${esc(res.learning_line)}”</p><div class="actions"><button class="secondary" data-gap-learning="${r.id}">Add as a learning goal</button><button class="text-button" data-gap-reset="${r.id}">Start again</button></div>` : `<div class="actions"><button class="text-button" data-gap-reset="${r.id}">Start again</button></div>`}</div>`;
-    return `<div class="gap-result"><strong>${res.verdict === 'adjacent' ? 'Related experience, stated honestly' : 'Drafted from your answers'}</strong><p class="diff-proposed"><span>Proposed bullet</span>${esc(res.bullet)}</p><p class="hint">${esc(res.explanation)} Edit it in CV studio after adding.</p><div class="actions"><button class="primary" data-gap-add="${r.id}">Add to CV draft</button><button class="text-button" data-gap-reset="${r.id}">Start again</button></div></div>`;
+    return `<div class="gap-result"><strong>${res.verdict === 'adjacent' ? 'Related experience, stated honestly' : 'Drafted from your answers'}</strong><p class="diff-proposed"><span>Proposed bullet${res.placement ? ` · goes under “${esc(res.placement)}”` : ' · goes at the end of Experience'}</span>${esc(res.bullet)}</p><p class="hint">${esc(res.explanation)} Edit it in CV studio after adding.</p><div class="actions"><button class="primary" data-gap-add="${r.id}">Add to CV draft</button><button class="text-button" data-gap-reset="${r.id}">Start again</button></div></div>`;
   }
   const choice = (i) => gap.choices?.[i] || '';
   return `<form class="gap-form" data-gap-form="${r.id}">
@@ -167,23 +168,24 @@ export function bind({ loadSample, rebind }) {
       });
     }));
     $$('[data-gap-reset]').forEach((b) => (b.onclick = () => { delete state.gaps[b.dataset.gapReset]; save(); showResults(false); }));
-    const addLine = (id, line, status, note) => {
+    const addLine = (id, placed, line, status, note) => {
       const r = state.requirements.find((x) => x.id === id);
-      const draft = currentDraft();
-      setDraft(draft.replace(/\s*$/, '') + '\n' + line);
+      setDraft(placed.text);
       r.evidence = line; r.status = status; r.note = note;
-      state.gaps[id].result.added = true; state.suggestions = null; save();
+      state.gaps[id].result.added = true; state.gaps[id].result.where = placed.where; state.suggestions = null; save();
       showResults(false);
     };
     $$('[data-gap-add]').forEach((b) => (b.onclick = () => {
       const id = b.dataset.gapAdd, res = state.gaps[id].result;
-      addLine(id, res.bullet, res.verdict === 'adjacent' ? 'partial' : 'evidence', 'Added from your Gap Interview answers. It now appears at the end of your CV draft — move it under the right role in CV studio.');
-      toast('Bullet added to your draft. Your Evidence Score has been updated.');
+      const placed = placeBullet(currentDraft(), res.bullet, res.placement);
+      addLine(id, placed, res.bullet, res.verdict === 'adjacent' ? 'partial' : 'evidence', `Added from your Gap Interview answers under “${placed.where}”. Review it in context in CV studio.`);
+      toast(`Bullet added under ${placed.where}. Evidence Score updated.`);
     }));
     $$('[data-gap-learning]').forEach((b) => (b.onclick = () => {
       const id = b.dataset.gapLearning, res = state.gaps[id].result;
-      addLine(id, res.learning_line, 'partial', 'Stated as a learning goal, not experience.');
-      toast('Learning goal added to the end of your draft.');
+      const placed = placeLearningLine(currentDraft(), res.learning_line);
+      addLine(id, placed, res.learning_line, 'partial', `Stated as a learning goal, not experience, ${placed.where}.`);
+      toast(`Learning goal added ${placed.where}.`);
     }));
   };
   bindGaps();
