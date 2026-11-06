@@ -2,6 +2,7 @@ import { state, setDraft, requirements, currentDraft, save } from '../state.js';
 import { $, $$, esc, heading, empty, toast, busy, download, confirm, locked } from '../ui.js';
 import { can, needs } from '../plans.js';
 import * as api from '../api.js';
+import { toDocxBlob, printCV } from '../export.js';
 
 export function render() {
   if (!state.cv) {
@@ -28,7 +29,9 @@ export function render() {
   <label class="field">Editable CV draft<textarea id="draft" class="editor-area" maxlength="50000">${esc(currentDraft())}</textarea></label>
   <div class="actions">
    ${ai ? '<button class="primary lime" id="suggest">Suggest clearer wording ✧</button>' : ''}
-   <button class="${ai ? 'secondary' : 'primary'}" id="export">Export CV · TXT ↓</button>
+   <button class="${ai ? 'secondary' : 'primary'}" id="export-docx">Export Word ↓</button>
+   <button class="secondary" id="export-pdf">Export PDF ↓</button>
+   <button class="text-button" id="export">Plain text ↓</button>
    <button class="secondary" id="reset-draft">Restore original</button>
   </div>
   <p class="hint">Changes are kept in this tab. Device saving is optional in workspace settings.</p>
@@ -61,6 +64,12 @@ export function bind({ rebind }) {
   if (!draftArea) return;
   draftArea.addEventListener('input', (e) => setDraft(e.target.value));
   $('#export').onclick = () => download('rolewoven-cv.txt', draftArea.value, 'text/plain');
+  $('#export-docx').onclick = (e) => busy(e.currentTarget, 'Building…', async () => {
+    const blob = await toDocxBlob(draftArea.value);
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'rolewoven-cv.docx'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('Word document ready. Check headings and bullets once in Word.');
+  });
+  $('#export-pdf').onclick = () => { try { printCV(draftArea.value); toast('Choose “Save as PDF” in the print dialog.'); } catch (error) { toast(error.message); } };
   $('#reset-draft').onclick = async () => {
     if (await confirm({ title: 'Restore the original CV?', body: 'This replaces your edited draft and clears applied suggestions. Export it first if you want to keep a copy.', action: 'Restore original' })) {
       setDraft(state.cv); state.applied = []; save(); draftArea.value = state.cv; refresh();

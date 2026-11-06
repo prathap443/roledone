@@ -69,9 +69,10 @@ export function createMockProvider() {
         return { intro: `The advert asks for ${context.requirement.name}.`, questions: [`Have you used ${context.requirement.name} or an equivalent tool? Where?`, 'What did you build or change with it, and what was the outcome?'] };
       }
       if (tool.name === 'draft_bullet') {
-        const joined = context.answers.join(' ');
-        if (/\b(no|never|not really|haven't|have not)\b/i.test(joined) && joined.length < 80) return { verdict: 'unsupported', bullet: '', explanation: 'Your answers do not describe hands-on experience.', learning_line: `Currently learning ${context.requirement.name}.` };
-        return { verdict: 'supported', bullet: `Used ${context.requirement.name}: ${context.answers[0].trim()}`, explanation: 'Drafted from your first answer.', learning_line: '' };
+        const joined = context.answers.filter((a) => !/^no\.?$/i.test(a.trim())).join(' ');
+        if (!joined || (/\b(no|never|not really|haven't|have not)\b/i.test(joined) && joined.length < 80)) return { verdict: 'unsupported', bullet: '', explanation: 'Your answers do not describe hands-on experience.', learning_line: `Currently learning ${context.requirement.name}.` };
+        const detail = context.answers.find((a) => /^yes\b/i.test(a.trim()))?.replace(/^yes\.?\s*/i, '').replace(/\(no further detail[^)]*\)/i, '').trim() || context.answers[0].trim();
+        return { verdict: 'supported', bullet: `Used ${context.requirement.name}: ${detail || 'as shown in the CV'}`, explanation: 'Drafted from your answer.', learning_line: '' };
       }
       if (tool.name === 'summarise_scan') {
         const ls = sentences(context.cv);

@@ -84,9 +84,15 @@ function gapInterview(r, gap) {
     if (res.verdict === 'unsupported') return `<div class="gap-result unsupported"><strong>Not enough to claim it — and that is fine.</strong><p>${esc(res.explanation)}</p>${res.learning_line ? `<p class="hint">Truthful alternative: “${esc(res.learning_line)}”</p><div class="actions"><button class="secondary" data-gap-learning="${r.id}">Add as a learning goal</button><button class="text-button" data-gap-reset="${r.id}">Start again</button></div>` : `<div class="actions"><button class="text-button" data-gap-reset="${r.id}">Start again</button></div>`}</div>`;
     return `<div class="gap-result"><strong>${res.verdict === 'adjacent' ? 'Related experience, stated honestly' : 'Drafted from your answers'}</strong><p class="diff-proposed"><span>Proposed bullet</span>${esc(res.bullet)}</p><p class="hint">${esc(res.explanation)} Edit it in CV studio after adding.</p><div class="actions"><button class="primary" data-gap-add="${r.id}">Add to CV draft</button><button class="text-button" data-gap-reset="${r.id}">Start again</button></div></div>`;
   }
+  const choice = (i) => gap.choices?.[i] || '';
   return `<form class="gap-form" data-gap-form="${r.id}">
  ${gap.intro ? `<p class="hint">${esc(gap.intro)}</p>` : ''}
- ${gap.questions.map((q, i) => `<label class="field">${esc(q)}<textarea data-gap-answer="${i}" maxlength="2000" rows="2" placeholder="Be specific: where, what you did, what happened. “No” is a fine answer.">${esc(gap.answers?.[i] || '')}</textarea></label>`).join('')}
+ ${gap.questions.map((q, i) => `<fieldset class="gap-q" data-gap-q="${i}">
+  <legend>${esc(q)}</legend>
+  <div class="yesno"><button type="button" class="${choice(i) === 'yes' ? 'on' : ''}" data-gap-choice="yes">Yes</button><button type="button" class="${choice(i) === 'no' ? 'on' : ''}" data-gap-choice="no">No</button></div>
+  <textarea data-gap-answer="${i}" maxlength="2000" rows="2" class="${choice(i) === 'yes' ? '' : 'hidden'}" placeholder="One line makes the bullet specific: where, what you did, what happened. Optional.">${esc(gap.answers?.[i] || '')}</textarea>
+ </fieldset>`).join('')}
+ <p class="hint">Say Yes only where it is true. With a Yes and no detail, the bullet can only use what is already in your CV.</p>
  <div class="actions"><button class="primary" type="submit">Draft my bullet ✧</button><button class="text-button" type="button" data-gap-reset="${r.id}">Cancel</button></div>
 </form>`;
 }
@@ -138,13 +144,24 @@ export function bind({ loadSample, rebind }) {
         $(`[data-gap-form="${r.id}"] textarea`)?.focus();
       });
     }));
+    $$('[data-gap-choice]').forEach((b) => (b.onclick = () => {
+      const fs = b.closest('[data-gap-q]'), i = Number(fs.dataset.gapQ), id = fs.closest('[data-gap-form]').dataset.gapForm;
+      const gap = state.gaps[id]; gap.choices = gap.choices || [];
+      gap.choices[i] = b.dataset.gapChoice; save();
+      $$('[data-gap-choice]', fs).forEach((x) => x.classList.toggle('on', x === b));
+      const ta = $('[data-gap-answer]', fs); ta.classList.toggle('hidden', b.dataset.gapChoice !== 'yes'); if (b.dataset.gapChoice === 'yes') ta.focus();
+    }));
     $$('[data-gap-form]').forEach((form) => (form.onsubmit = async (e) => {
       e.preventDefault();
       const id = form.dataset.gapForm, r = requirements().find((x) => x.id === id), gap = state.gaps[id];
       gap.answers = $$('[data-gap-answer]', form).map((t) => t.value); save();
-      if (!gap.answers.some((a) => a.trim().length >= 10)) { toast('Answer at least one question in a sentence or two.'); return; }
+      const choices = gap.choices || [];
+      if (!choices.some(Boolean)) { toast('Answer Yes or No to at least one question.'); return; }
+      if (!choices.includes('yes')) { toast('All No — nothing to add for this requirement, and that is fine.'); gap.result = { verdict: 'unsupported', bullet: '', explanation: 'You answered No to every question, so there is nothing truthful to add here.', learning_line: `Currently developing ${r.name}.` }; save(); showResults(false); return; }
+      // Send the model a clear Yes/No plus any detail; "No" answers carry no text to draft from.
+      const answers = gap.questions.map((q, i) => choices[i] === 'yes' ? `Yes.${gap.answers[i]?.trim() ? ' ' + gap.answers[i].trim() : ' (no further detail given — use only facts already in the CV)'}` : 'No.');
       await busy($('button[type="submit"]', form), 'Drafting…', async () => {
-        const res = await api.gapBullet({ cv: state.cv, requirement: r, questions: gap.questions, answers: gap.answers, otherGaps: gapsOf().filter((g) => g.id !== id) });
+        const res = await api.gapBullet({ cv: state.cv, requirement: r, questions: gap.questions, answers, otherGaps: gapsOf().filter((g) => g.id !== id) });
         gap.result = res; save();
         showResults(false);
       });

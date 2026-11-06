@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Evidence-first career studio — responsive product prototype",
+  "description": "Evidence-first career studio \u2014 responsive product prototype",
   "scripts": {
     "start": "node server.mjs",
     "dev": "node server.mjs",
@@ -17,5 +17,8 @@
   "dependencies": {
     "mammoth": "1.13.0",
     "pdfjs-dist": "6.5.438"
+  },
+  "devDependencies": {
+    "jszip": "3.10.1"
   }
 }

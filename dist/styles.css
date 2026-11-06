@@ -128,3 +128,12 @@ dialog:has(.plan-table){max-width:640px}
 @media(max-width:800px){.scan-hero{grid-template-columns:1fr}.next-bar{flex-direction:column;align-items:stretch}nav button{font-size:8px}}
 @media(max-width:540px){.tiles{grid-template-columns:1fr 1fr;gap:8px}.tile{padding:12px}.tile strong{font-size:26px}}
 @media print{.scan-hero,.next-bar{background:#fff!important;color:var(--ink)!important;border:1px solid #ccc!important}.scan-copy h2,.next-bar h3{color:var(--ink)!important}.scan-copy p{color:#444!important}.tile{break-inside:avoid}.tiles{display:grid!important;grid-template-columns:repeat(4,1fr)}.hint.centre,.next-bar .actions,.scan-copy .actions,#tile-detail{display:none!important}.two-col.scan-lists{display:grid!important;grid-template-columns:1fr 1fr}}
+
+/* ---- Gap Interview yes/no, export ---- */
+.gap-q{border:0;padding:0;margin:0 0 14px}
+.gap-q legend{font-size:13px;font-weight:600;color:var(--ink);margin-bottom:8px;line-height:1.5;padding:0}
+.yesno{display:flex;gap:8px;margin-bottom:8px}
+.yesno button{min-height:36px;padding:6px 18px;border-radius:20px;border:1px solid var(--line);background:#fff;font-weight:600;font-size:12px;cursor:pointer}
+.yesno button.on{background:var(--ink);color:var(--lime);border-color:var(--ink)}
+.gap-q textarea.hidden{display:none}
+.gap-q textarea{min-height:56px}

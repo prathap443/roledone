@@ -213,7 +213,7 @@ export function createAI(provider) {
       const qa = questions.map((q, i) => `Q: ${q}\nA: ${answers[i] || '(no answer)'}`).join('\n\n');
       const raw = await provider.complete({
         system: GROUNDING_RULES,
-        user: `Requirement missing from the CV: "${requirement.name}".\n\nThe candidate answered these questions. Decide whether their answers show real experience. If supported or adjacent, draft ONE CV bullet using only facts, tools and numbers that appear in their answers or the CV. Never upgrade "I read about it" or "I'd like to learn" into experience. If unsupported, leave the bullet empty and offer a truthful learning_line instead.\n\n<answers>\n${qa}\n</answers>\n\n${wrap('cv', cv)}`,
+        user: `Requirement missing from the CV: "${requirement.name}".\n\nThe candidate answered these questions. Decide whether their answers show real experience. If supported or adjacent, draft ONE CV bullet using only facts, tools and numbers that appear in their answers or the CV. Never upgrade "I read about it" or "I'd like to learn" into experience. A bare "Yes" with no detail is only usable if the CV itself already contains facts that support it (for example a question about regulated-sector experience and a CV listing government departments); then draft from those CV facts, otherwise return verdict unsupported and explain what detail would be needed. If unsupported, leave the bullet empty and offer a truthful learning_line instead.\n\n<answers>\n${qa}\n</answers>\n\n${wrap('cv', cv)}`,
         tool: GAP_BULLET_TOOL,
         context: { cv, requirement, questions, answers },
         maxTokens: 1200,

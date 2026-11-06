@@ -36,9 +36,9 @@ export const COMPARISON = [
   ['Requirement list with what is missing', '✓', '✓', '✓'],
   ['CV suggestions you can apply', '—', 'Unlimited', 'Unlimited'],
   ['Gap Interview → new bullets from your answers', '—', '✓', '✓'],
-  ['CV studio and TXT export', '—', '✓', '✓'],
+  ['CV studio with Word, PDF and text export', '—', '✓', '✓'],
   ['Interview questions written for this role', '—', 'Unlimited', 'Unlimited'],
   ['Answer review (STAR)', '—', '✓', '✓'],
   ['Follow-up questions and mock session', '—', '—', '✓'],
-  ['Multiple CV versions, DOCX / PDF export', '—', '—', '✓'],
+  ['Multiple CV versions per role', '—', '—', '✓'],
 ];

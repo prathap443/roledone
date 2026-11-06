@@ -111,8 +111,10 @@ test('questions and gap interview endpoints round-trip through the mock provider
     const terraform = match.requirements.find((r) => r.name === 'Terraform');
     const gq = await (await call('/api/gap-questions', { cv: sampleCV, jd: sampleJD, requirement: terraform })).json();
     assert.ok(gq.questions.length >= 2);
-    const tooShort = await call('/api/gap-bullet', { cv: sampleCV, requirement: terraform, questions: gq.questions, answers: ['no'] });
-    assert.equal(tooShort.status, 400);
+    const allNo = await call('/api/gap-bullet', { cv: sampleCV, requirement: terraform, questions: gq.questions, answers: ['No.', 'No.'] });
+    assert.equal(allNo.status, 400);
+    const bareYes = await (await call('/api/gap-bullet', { cv: sampleCV, requirement: terraform, questions: gq.questions, answers: ['Yes. (no further detail given — use only facts already in the CV)', 'No.'] })).json();
+    assert.ok(['supported', 'adjacent', 'unsupported'].includes(bareYes.verdict));
     const bullet = await (await call('/api/gap-bullet', { cv: sampleCV, requirement: terraform, questions: gq.questions, answers: ['Yes, I wrote Terraform for the Synapse workspace in my last role.', ''], otherGaps: [{ name: 'CI/CD', status: 'gap' }] })).json();
     assert.equal(bullet.verdict, 'supported'); assert.match(bullet.bullet, /Terraform/);
   } finally { await close(); }

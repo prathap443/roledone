@@ -7,3 +7,6 @@ await copyFile('node_modules/pdfjs-dist/LICENSE','dist/vendor/pdfjs/LICENSE');
 await copyFile('node_modules/mammoth/mammoth.browser.min.js','dist/vendor/mammoth/mammoth.browser.min.js');
 await copyFile('node_modules/mammoth/LICENSE','dist/vendor/mammoth/LICENSE');
 console.log('Pinned document parsers copied into the static site.');
+await mkdir('dist/vendor/jszip', {recursive:true});
+await copyFile('node_modules/jszip/dist/jszip.min.js','dist/vendor/jszip/jszip.min.js');
+await copyFile('node_modules/jszip/LICENSE.markdown','dist/vendor/jszip/LICENSE.markdown');
