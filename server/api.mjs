@@ -3,7 +3,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
-import { LIMITS } from './validate.mjs';
+import { LIMITS, isLogistics } from './validate.mjs';
 
 const MAX_BODY = 256 * 1024;
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.wasm': 'application/wasm', '.svg': 'image/svg+xml', '.json': 'application/json', '.bcmap': 'application/octet-stream', '.pfb': 'application/octet-stream', '.ttf': 'font/ttf' };
@@ -55,7 +55,8 @@ const text = (v, max, field, { required = true } = {}) => {
 };
 
 const reqList = (v) => (Array.isArray(v) ? v : []).slice(0, LIMITS.requirements)
-  .map((r) => ({ name: text(r?.name, 80, 'requirement.name'), status: ['evidence', 'partial', 'gap'].includes(r?.status) ? r.status : 'gap' }));
+  .map((r) => ({ name: text(r?.name, 80, 'requirement.name'), status: ['evidence', 'partial', 'gap'].includes(r?.status) ? r.status : 'gap' }))
+  .filter((r) => !isLogistics(r.name)); // older saved workspaces may still carry logistics rows
 
 export function createHandler({ ai, root = resolve('dist'), rateLimit = createRateLimiter(), log = console, usage = null } = {}) {
   const send = (res, status, body, headers = {}) => {

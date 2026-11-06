@@ -84,3 +84,21 @@ test('validateGapBullet only lets the candidate’s own facts through', () => {
   const none = validateGapBullet({ verdict: 'unsupported', bullet: 'Expert in Terraform.', explanation: 'e', learning_line: 'Currently learning Terraform.' }, { ...base, answers: ['No, never used it.'] });
   assert.equal(none.bullet, ''); assert.equal(none.learning_line, 'Currently learning Terraform.');
 });
+
+import { isLogistics } from '../server/validate.mjs';
+test('logistics are never requirements', () => {
+  const jd = 'Senior Data Engineer. On-site in Liverpool 3 days a week. Must have SQL and Terraform. Inside IR35, £550/day. Start date January. Must be eligible for SC clearance.';
+  const raw = { requirements: [
+    { name: 'On-site in Liverpool', kind: 'must', source: 'On-site in Liverpool 3 days a week', evidence: null, status: 'gap', note: '' },
+    { name: 'SQL', kind: 'must', source: 'Must have SQL and Terraform', evidence: null, status: 'gap', note: '' },
+    { name: 'SC clearance eligibility', kind: 'must', source: 'Must be eligible for SC clearance', evidence: null, status: 'gap', note: '' },
+    { name: 'Inside IR35', kind: 'nice', source: 'Inside IR35, £550/day', evidence: null, status: 'gap', note: '' },
+    { name: 'January start', kind: 'nice', source: 'Start date January', evidence: null, status: 'gap', note: '' },
+  ] };
+  const { requirements, dropped } = validateMatch(raw, { cv: 'I know SQL.', jd });
+  assert.deepEqual(requirements.map((r) => r.name), ['SQL']);
+  assert.equal(dropped, 4);
+  assert.ok(isLogistics('Hybrid working'));
+  assert.ok(!isLogistics('Cloud security'));
+  assert.ok(!isLogistics('Data pipeline availability monitoring'));
+});

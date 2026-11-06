@@ -49,6 +49,9 @@ export function unsupportedNumbers(proposed, allowedSources) {
 
 const asText = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const STATUSES = new Set(['evidence', 'partial', 'gap']);
+/** Logistics are conditions of the job, not evidence of ability: never a requirement, never scored, never a question. */
+export const LOGISTICS = /\b(on-?site|onsite|hybrid|remote|work(ing)? from home|wfh|office|location|based in|relocat|commut|travel|salary|day rate|rate|pay|benefits|pension|start date|notice period|immediate start|able to start|right to work|visa|sponsorship|citizen|eligib|clearance|sc clear|dv clear|bpss|dbs|background check|hours|shift|contract length|duration|ir35|inside ir35|outside ir35|full[- ]time|part[- ]time|permanent|fixed[- ]term)\b/i;
+export const isLogistics = (name, source = '') => LOGISTICS.test(name) || (name.split(/\s+/).length <= 6 && LOGISTICS.test(source) && !/\b(sql|python|spark|azure|aws|gcp|data|pipeline|engineer|model|api|cloud|devops|terraform|security|test)\w*\b/i.test(name));
 const KINDS = new Set(['must', 'nice', 'responsibility']);
 
 /**
@@ -66,6 +69,7 @@ export function validateMatch(raw, { cv, jd }) {
     const name = asText(item?.name, 80);
     const source = locateSpan(asText(item?.source, 400), jd);
     if (!name || !source) { dropped++; continue; }
+    if (isLogistics(name, source)) { dropped++; continue; }
     const key = name.toLowerCase();
     if (seen.has(key)) { dropped++; continue; }
     seen.add(key);

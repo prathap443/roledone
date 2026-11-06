@@ -180,7 +180,7 @@ export function createAI(provider) {
     async match({ cv, jd }) {
       const raw = await request(provider, {
         tool: MATCH_TOOL, tier: 'quality', cv, jd,
-        task: `Extract the requirements from the job description above, then check each against the CV above.\n\nInclude technical skills, tools, platforms, methodologies, domain knowledge, and behavioural requirements (communication, leadership, ownership). Skip generic filler ("team player") unless the advert makes it a real requirement. Prefer 8–20 requirements. Keep notes to one short sentence.`,
+        task: `Extract the requirements from the job description above, then check each against the CV above.\n\nInclude technical skills, tools, platforms, methodologies, domain knowledge, and behavioural requirements (communication, leadership, ownership). Skip generic filler ("team player") unless the advert makes it a real requirement. Do NOT list conditions of the job as requirements: location, on-site/hybrid/remote, salary or rate, start date, notice period, hours, travel, right to work, security clearance eligibility, contract length or IR35 status — these are logistics, not abilities. Prefer 8–20 requirements. Keep notes to one short sentence.`,
         context: { cv, jd },
         maxTokens: 5000,
       });
@@ -203,10 +203,16 @@ export function createAI(provider) {
 
     async questions({ cv, jd, requirements, level = 'technical', count = 5 }) {
       const list = requirements.map((r) => `- ${r.name} [${r.status}]`).join('\n');
-      const depth = Math.round(count * 0.4), gap = Math.round(count * 0.25), behavioural = Math.max(1, Math.round(count * 0.15)), scenario = count - depth - gap - behavioural;
+      const STAGE = {
+        screening: { label: 'recruiter screening', mix: { depth: 0.3, gap: 0.2, behavioural: 0.3 }, rules: 'Keep it conversational: motivation, overview of experience, a few light technical checks, and practical questions (notice period, location, rate) are appropriate here and only here.' },
+        technical: { label: 'technical interview', mix: { depth: 0.5, gap: 0.25, behavioural: 0.1 }, rules: 'EVERY question must be technical. Depth questions probe how they built or ran something named in the CV (design choices, failure modes, performance, trade-offs). Gap questions ask how they would technically approach the missing skill, what they would compare it to, and where they would need support. Behavioural questions must be about technical collaboration (code review, incident, disagreement over a design). No questions about location, logistics, salary, motivation or "tell me about yourself".' },
+        senior: { label: 'senior panel', mix: { depth: 0.4, gap: 0.2, behavioural: 0.2 }, rules: 'Technical depth plus architecture, platform ownership, mentoring and stakeholder judgement. No logistics or motivation questions.' },
+      }[level] || null;
+      const stage = STAGE || { label: 'technical interview', mix: { depth: 0.5, gap: 0.25, behavioural: 0.1 }, rules: '' };
+      const depth = Math.round(count * stage.mix.depth), gap = Math.round(count * stage.mix.gap), behavioural = Math.max(1, Math.round(count * stage.mix.behavioural)), scenario = count - depth - gap - behavioural;
       const raw = await request(provider, {
         tool: QUESTIONS_TOOL, tier: 'fast', cv, jd,
-        task: `Write exactly ${count} interview questions for this candidate and role at ${level === 'screening' ? 'recruiter screening' : level === 'senior' ? 'senior panel' : 'technical interview'} level.\n\nMix: ${depth} depth questions on requirements marked evidence (reference the candidate's actual projects or tools from the CV; cover as many different evidenced requirements as possible rather than repeating one), ${gap} gap questions on requirements marked gap or partial (how they would approach it, where they would need support), ${behavioural} behavioural question${behavioural > 1 ? 's' : ''} from responsibilities in the JD, and ${scenario} realistic scenario question${scenario === 1 ? '' : 's'} from the role's day-to-day. Order them as an interviewer would: warm-up, depth, scenarios, gaps, behavioural. No two questions may test the same thing. Every question must be specific to this CV and JD; no generic "tell me about yourself".\n\nRequirements:\n${list}`,
+        task: `Write exactly ${count} interview questions for this candidate and role at ${stage.label} level. ${stage.rules}\n\nMix: ${depth} depth questions on requirements marked evidence (reference the candidate's actual projects or tools from the CV; cover as many different evidenced requirements as possible rather than repeating one), ${gap} gap questions on requirements marked gap or partial (how they would approach it, where they would need support), ${behavioural} behavioural question${behavioural > 1 ? 's' : ''} from responsibilities in the JD, and ${scenario} realistic scenario question${scenario === 1 ? '' : 's'} from the role's day-to-day. Order them as an interviewer would: warm-up, depth, scenarios, gaps, behavioural. No two questions may test the same thing. Every question must be specific to this CV and JD; no generic "tell me about yourself".\n\nRequirements:\n${list}`,
         context: { cv, jd, requirements, level, count },
         maxTokens: 1200 + 320 * count,
       });
