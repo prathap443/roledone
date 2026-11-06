@@ -35,6 +35,15 @@ export function createRateLimiter({ limit = 40, windowMs = 15 * 60 * 1000 } = {}
   };
 }
 
+function readRaw(req, limit = MAX_BODY) {
+  return new Promise((resolvePromise, reject) => {
+    const chunks = []; let size = 0;
+    req.on('data', (c) => { size += c.length; if (size > limit) { reject(new HttpError(413, 'Request too large')); req.destroy(); } else chunks.push(c); });
+    req.on('end', () => resolvePromise(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', () => reject(new HttpError(400, 'Request aborted')));
+  });
+}
+
 function readJson(req) {
   return new Promise((resolvePromise, reject) => {
     if (!/^application\/json/i.test(req.headers['content-type'] || '')) return reject(new HttpError(415, 'Send application/json'));
@@ -58,14 +67,62 @@ const reqList = (v) => (Array.isArray(v) ? v : []).slice(0, LIMITS.requirements)
   .map((r) => ({ name: text(r?.name, 80, 'requirement.name'), status: ['evidence', 'partial', 'gap'].includes(r?.status) ? r.status : 'gap' }))
   .filter((r) => !isLogistics(r.name)); // older saved workspaces may still carry logistics rows
 
-export function createHandler({ ai, root = resolve('dist'), rateLimit = createRateLimiter(), log = console, usage = null } = {}) {
+const RANK_FALLBACK = { free: 0, pro: 1, premium: 2 };
+/** Minimum plan per AI endpoint. Scan summary stays free: it is the conversion hook. */
+const REQUIRED_PLAN = { '/api/suggestions': 'pro', '/api/gap-questions': 'pro', '/api/gap-bullet': 'pro', '/api/questions': 'pro', '/api/feedback': 'pro', '/api/structure': 'pro' };
+
+export function createHandler({ ai, root = resolve('dist'), rateLimit = createRateLimiter(), log = console, usage = null, billing = null } = {}) {
   const send = (res, status, body, headers = {}) => {
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers });
     res.end(JSON.stringify(body));
   };
 
+  // Effective plan for a request: the server default, or the entitlement token if it grants more.
+  async function planFor(req) {
+    const base = ai.status().defaultPlan || 'free';
+    if (!billing) return { plan: base };
+    const { plan, claims, status, periodEnd } = await billing.entitlements.planFor(req.headers['x-roledone-token']);
+    return billing.entitlements.allows(plan, base) ? { plan, claims, status, periodEnd } : { plan: base, claims, status, periodEnd };
+  }
+
   async function api(req, res, pathname) {
-    if (pathname === '/api/status' && req.method === 'GET') return send(res, 200, ai.status());
+    if (pathname === '/api/status' && req.method === 'GET') return send(res, 200, { ...ai.status(), billing: Boolean(billing), plans: billing ? Object.keys(billing.stripe.prices) : [] });
+
+    if (pathname === '/api/stripe/webhook' && req.method === 'POST') {
+      if (!billing) throw new HttpError(404, 'Billing is not configured');
+      const raw = await readRaw(req);
+      const event = billing.stripe.verifyWebhook(raw, req.headers['stripe-signature']);
+      const obj = event.data?.object || {};
+      if (event.type === 'checkout.session.completed') { /* entitlement is issued on confirm; nothing to do */ }
+      else if (event.type.startsWith('customer.subscription.')) billing.entitlements.applyEvent(event.type, billing.stripe.subscriptionInfo(obj));
+      else if (event.type === 'invoice.payment_failed' && obj.subscription) { try { billing.entitlements.remember(await billing.stripe.subscription(obj.subscription)); } catch { /* re-checked later */ } }
+      log.info?.(`[billing] webhook ${event.type}`);
+      return send(res, 200, { received: true });
+    }
+    if (pathname.startsWith('/api/billing/')) {
+      if (!billing) throw new HttpError(404, 'Billing is not configured');
+      if (pathname === '/api/billing/status' && req.method === 'GET') { const e = await planFor(req); return send(res, 200, { plan: e.plan, status: e.status || null, renews: e.periodEnd || null, subscribed: Boolean(e.claims) }); }
+      if (req.method !== 'POST') throw new HttpError(405, 'Method not allowed');
+      const body = await readJson(req);
+      if (pathname === '/api/billing/checkout') {
+        const plan = ['pro', 'premium'].includes(body.plan) ? body.plan : 'pro';
+        const email = typeof body.email === 'string' && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(body.email) ? body.email : undefined;
+        return send(res, 200, { url: await billing.stripe.checkoutUrl({ plan, email }) });
+      }
+      if (pathname === '/api/billing/confirm') {
+        const info = await billing.stripe.confirmCheckout(text(body.session_id, 200, 'session_id'));
+        if (!info.plan) throw new HttpError(402, 'Subscription price is not one of ours');
+        billing.entitlements.remember(info);
+        log.info?.(`[billing] confirmed ${info.plan} for ${info.customerId}`);
+        return send(res, 200, { token: billing.entitlements.issue(info), plan: info.plan, renews: info.periodEnd, email: info.email });
+      }
+      if (pathname === '/api/billing/portal') {
+        const { claims } = await billing.entitlements.planFor(req.headers['x-roledone-token']);
+        if (!claims) throw new HttpError(401, 'No subscription on this device');
+        return send(res, 200, { url: await billing.stripe.portalUrl(claims.cus) });
+      }
+      throw new HttpError(404, 'Unknown endpoint');
+    }
     if (pathname === '/api/usage' && req.method === 'GET') {
       // Aggregate token/cost/latency figures since the server started. No document content, no per-user data.
       if (!usage) throw new HttpError(404, 'Usage accounting is not enabled');
@@ -77,6 +134,12 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
     const client = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
     const quota = rateLimit(client);
     if (!quota.allowed) throw new HttpError(429, 'Too many requests. Try again in a few minutes.');
+
+    const required = REQUIRED_PLAN[pathname];
+    if (required) {
+      const { plan } = await planFor(req);
+      if ((RANK_FALLBACK[plan] ?? 0) < RANK_FALLBACK[required]) throw new HttpError(402, `This needs the ${required[0].toUpperCase() + required.slice(1)} plan.`);
+    }
 
     const body = await readJson(req);
     if (pathname === '/api/match') {

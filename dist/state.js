@@ -51,7 +51,18 @@ export function setSourceDoc(doc) { session.sourceDoc = doc || null; if (state.r
 let onStorageError = () => {};
 export function setStorageErrorHandler(fn) { onStorageError = fn; }
 
+const STASH = 'roledone-stash'; // survives a same-tab round trip (e.g. Stripe Checkout) without device saving
+export function stash() { try { sessionStorage.setItem(STASH, JSON.stringify(state)); } catch { /* ignore */ } }
+
 export function load() {
+  try {
+    const stashed = sessionStorage.getItem(STASH);
+    if (stashed) {
+      sessionStorage.removeItem(STASH);
+      const saved = JSON.parse(stashed);
+      if (saved && typeof saved.cv === 'string') { Object.assign(state, blank(), saved); if (state.remember) save(); return; }
+    }
+  } catch { /* fall through to normal load */ }
   try {
     const raw = localStorage.getItem(KEY) || LEGACY_KEYS.map((k) => localStorage.getItem(k)).find(Boolean);
     const saved = JSON.parse(raw || 'null');

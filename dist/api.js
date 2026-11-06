@@ -3,17 +3,33 @@
 import { state, session, save } from './state.js';
 import { modal, closeModal, $ } from './ui.js';
 
+const TOKEN_KEY = 'roledone-token';
+export const getToken = () => { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } };
+export const setToken = (t) => { try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ } };
+
 async function request(path, body) {
   let res;
+  const headers = { ...(getToken() ? { 'x-roledone-token': getToken() } : {}) };
   try {
-    res = await fetch(path, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : undefined);
+    res = await fetch(path, body ? { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) } : { headers });
   } catch {
     throw new Error('Could not reach the Roledone server. Check your connection and try again.');
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  if (!res.ok) { const err = new Error(data.error || `Request failed (${res.status})`); err.status = res.status; throw err; }
   return data;
 }
+
+export const billingEnabled = () => Boolean(session.ai?.billing);
+export async function loadBilling() {
+  session.billing = { plan: null, subscribed: false };
+  if (!billingEnabled()) return session.billing;
+  try { session.billing = await request('/api/billing/status'); } catch { /* keep defaults */ }
+  return session.billing;
+}
+export const startCheckout = (plan, email) => request('/api/billing/checkout', { plan, email });
+export const confirmCheckout = (session_id) => request('/api/billing/confirm', { session_id });
+export const portal = () => request('/api/billing/portal', {});
 
 export async function loadStatus() {
   try { session.ai = await request('/api/status'); } catch { session.ai = { ai: false, provider: null, model: null }; }

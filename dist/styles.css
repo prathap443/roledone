@@ -159,3 +159,5 @@ dialog:has(.plan-table){max-width:640px}
 @media(max-width:1240px){.preview-frame iframe{transform:scale(.78);margin-bottom:-247px}}
 @media(max-width:900px){.templates{grid-template-columns:1fr}.preview-wrap{position:static}.preview-frame iframe{transform:scale(.45);margin-bottom:-618px}}
 @media(max-width:540px){.gallery{grid-template-columns:1fr 1fr;gap:8px}.thumb iframe{transform:scale(.19)}.preview-frame iframe{transform:scale(.42);margin-bottom:-651px}}
+.primary.small{min-height:34px;padding:6px 12px;font-size:12px}
+.cta-row td{padding-top:12px;border-bottom:0}

@@ -26,7 +26,12 @@ export const FEATURES = {
   exportDocx: 'premium',
 };
 
-export const plan = () => (RANK[state.plan] !== undefined ? state.plan : RANK[session.ai?.defaultPlan] !== undefined ? session.ai.defaultPlan : 'free');
+/** Effective plan: paid subscription on this device, else the server default, else a developer-preview override. */
+export const plan = () => {
+  const paid = session.billing?.plan, base = session.ai?.defaultPlan, preview = state.plan;
+  const best = [paid, base].filter((p) => RANK[p] !== undefined).sort((a, b) => RANK[b] - RANK[a])[0] || 'free';
+  return RANK[preview] !== undefined && !session.billing?.subscribed ? preview : best;
+};
 export const can = (feature) => RANK[plan()] >= RANK[FEATURES[feature] || 'free'];
 export const needs = (feature) => PLANS[FEATURES[feature] || 'free'].label;
 

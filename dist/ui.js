@@ -61,6 +61,7 @@ export async function busy(button, label, action) {
     return await action();
   } catch (error) {
     toast(error.message || 'Something went wrong.');
+    if (error.status === 402) document.querySelector('[data-upgrade]')?.click?.() || document.dispatchEvent(new CustomEvent('roledone:upgrade'));
     return undefined;
   } finally {
     if (button.isConnected) { button.disabled = false; button.removeAttribute('aria-busy'); button.innerHTML = original; }

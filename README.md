@@ -56,6 +56,10 @@ Upload or paste a CV with no job description and get a 0–100 CV score with fou
 
 When the CV was uploaded as a Word `.docx`, CV studio offers **Export Word · your design**: the draft is diffed against the extracted text line by line and written back into the original document (`dist/docx-edit.js`) — changed lines keep their paragraph's formatting, new bullets clone the neighbouring list item's style and numbering, deleted lines are removed. Fonts, colours, headings, tables and layout are untouched. The file never leaves the browser; it is kept in memory (and in IndexedDB only when device saving is on). Pasted or PDF sources fall back to the clean Word export.
 
+### Billing (Stripe)
+
+Set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO` (and optionally `STRIPE_PRICE_PREMIUM`) and `APP_URL` to enable payments; leave them unset to run without billing. Checkout is Stripe-hosted. After a successful Checkout the server confirms the session with Stripe and issues a signed entitlement token (customer, subscription, plan, period end) that the browser stores and sends as `x-roledone-token`; paid endpoints (`/api/suggestions`, `/api/gap-*`, `/api/questions`, `/api/feedback`, `/api/structure`) return 402 without a sufficient plan. The server re-checks the subscription with Stripe every six hours and on webhooks (`/api/stripe/webhook`: subscription updated/deleted, payment failed), with a three-day grace after period end. "Manage or cancel" opens the Stripe Customer Portal. `ROLEDONE_DEFAULT_PLAN` still raises the floor for every visitor (testing). Limitation until accounts exist: the entitlement lives in the browser that paid.
+
 ### Plans (developer preview)
 
 Free: scan, Evidence Score, and the full list of what is missing. Pro: suggestions, Gap Interview, CV studio and export, generated questions and answer review. Premium: follow-ups, multiple CV versions, DOCX/PDF export (not built yet). The active plan is a workspace setting for now; entitlement enforcement arrives with accounts and payments.
