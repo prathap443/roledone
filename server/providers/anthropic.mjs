@@ -18,6 +18,7 @@ export function createAnthropicProvider({
   timeoutMs = 90000,
   fetchImpl = fetch,
   log = console,
+  usage = null, // createUsage() instance; optional
 } = {}) {
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY is required for the anthropic provider');
   const supportsEffort = new Map(); // model -> boolean, learned from the first 400
@@ -60,6 +61,7 @@ export function createAnthropicProvider({
       };
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const t0 = Date.now();
       try {
         let body = supportsEffort.get(chosen) === false ? base : { ...base, output_config: { effort } };
         let res = await call(body, controller.signal);
@@ -78,9 +80,11 @@ export function createAnthropicProvider({
         }
         const data = await res.json();
         const u = data.usage || {};
-        this.usage.calls++; this.usage.input += u.input_tokens || 0; this.usage.output += u.output_tokens || 0;
-        this.usage.cacheRead += u.cache_read_input_tokens || 0; this.usage.cacheWrite += u.cache_creation_input_tokens || 0;
-        log.info?.(`[ai] ${chosen} ${tool.name} in=${u.input_tokens || 0} cached=${u.cache_read_input_tokens || 0} out=${u.output_tokens || 0}`);
+        const tokens = { input: u.input_tokens || 0, output: u.output_tokens || 0, cacheRead: u.cache_read_input_tokens || 0, cacheWrite: u.cache_creation_input_tokens || 0 };
+        const ms = Date.now() - t0;
+        this.usage.calls++; this.usage.input += tokens.input; this.usage.output += tokens.output; this.usage.cacheRead += tokens.cacheRead; this.usage.cacheWrite += tokens.cacheWrite;
+        const usd = usage?.record({ model: chosen, tool: tool.name, tokens, ms });
+        log.info?.(`[ai] ${chosen} ${tool.name} ${ms}ms in=${tokens.input} cacheRead=${tokens.cacheRead} cacheWrite=${tokens.cacheWrite} out=${tokens.output}${usd != null ? ` ~$${usd.toFixed(4)}` : ''}`);
         const blocksOut = data.content || [];
         const block = blocksOut.find((c) => c.type === 'tool_use' && c.name === tool.name) || blocksOut.find((c) => c.type === 'tool_use');
         if (block) return block.input;
@@ -89,6 +93,7 @@ export function createAnthropicProvider({
         if (json) { try { return JSON.parse(json); } catch { /* fall through */ } }
         throw Object.assign(new Error(`Model returned no structured output (stop_reason: ${data.stop_reason || 'unknown'})`), { status: 502 });
       } catch (error) {
+        usage?.record({ model: chosen, tool: tool.name, tokens: {}, ms: Date.now() - t0, error: true });
         if (error.name === 'AbortError') throw Object.assign(new Error('AI request timed out'), { status: 504 });
         throw error;
       } finally {

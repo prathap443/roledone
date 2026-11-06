@@ -38,7 +38,7 @@ npm test
 - **Interview room** — structured STAR review of a practice answer: what is present, what is missing, strengths, improvements, and the follow-up a good interviewer would ask.
 - Consent prompt before the first request; text is sent only when an AI button is pressed; the server does not store or log document bodies.
 - Rate limiting, 256 KB body cap, 50,000-character field caps, Content-Security-Policy, and a 90 s upstream timeout.
-- Cost controls: two model tiers, low thinking effort, and prompt caching (the tool set, system prompt and CV open every request, so a session pays for the CV once). Token usage per call is logged server-side.
+- Cost controls: two model tiers, low thinking effort, and prompt caching (the tool set, system prompt and CV open every request, so a session pays for the CV once). Token usage per call is logged server-side (`[ai] model tool ms in= cacheRead= cacheWrite= out= ~$`), and `GET /api/usage` returns aggregates since start: calls, tokens, estimated USD per model and per tool, average latency, and cache hit rate. Prices can be overridden with `ROLEDONE_PRICES` (JSON).
 
 - **Evidence Score** (0–100) — weighted coverage of the role's requirements: must-haves count fully, nice-to-haves half, partial mentions half credit. Shown with its breakdown; not an ATS score.
 - **Gap Interview** — for each missing requirement, the AI asks two or three concrete questions answered Yes/No with optional detail; if the answers show real experience it drafts one bullet from the candidate's own words (numbers must come from the answers or CV; other missing skills cannot be smuggled in) and the user adds it to the draft. If not, it offers a truthful learning-goal line. Nothing is ever added without the user's own account of it.

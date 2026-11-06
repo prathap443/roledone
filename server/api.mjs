@@ -57,7 +57,7 @@ const text = (v, max, field, { required = true } = {}) => {
 const reqList = (v) => (Array.isArray(v) ? v : []).slice(0, LIMITS.requirements)
   .map((r) => ({ name: text(r?.name, 80, 'requirement.name'), status: ['evidence', 'partial', 'gap'].includes(r?.status) ? r.status : 'gap' }));
 
-export function createHandler({ ai, root = resolve('dist'), rateLimit = createRateLimiter(), log = console } = {}) {
+export function createHandler({ ai, root = resolve('dist'), rateLimit = createRateLimiter(), log = console, usage = null } = {}) {
   const send = (res, status, body, headers = {}) => {
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers });
     res.end(JSON.stringify(body));
@@ -65,6 +65,11 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
 
   async function api(req, res, pathname) {
     if (pathname === '/api/status' && req.method === 'GET') return send(res, 200, ai.status());
+    if (pathname === '/api/usage' && req.method === 'GET') {
+      // Aggregate token/cost/latency figures since the server started. No document content, no per-user data.
+      if (!usage) throw new HttpError(404, 'Usage accounting is not enabled');
+      return send(res, 200, usage.summary());
+    }
     if (req.method !== 'POST') throw new HttpError(405, 'Method not allowed');
     if (!ai.provider) throw new HttpError(503, 'AI is not configured on this server. Set ANTHROPIC_API_KEY to enable it.');
 

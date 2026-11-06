@@ -153,3 +153,33 @@ test('anthropic adapter caches CV blocks, routes tiers, and drops effort when a 
   assert.equal(calls[3].model, 'q'); assert.deepEqual(calls[3].output_config, { effort: 'low' });
   assert.equal(provider.usage.calls, 3); assert.equal(provider.usage.cacheRead, 15);
 });
+
+test('/api/usage exposes aggregates only, and 404s when accounting is off', async () => {
+  const { createUsage } = await import('../server/usage.mjs');
+  const usage = createUsage({ env: {} });
+  usage.record({ model: 'claude-haiku-5-5', tool: 'review_answer', tokens: { input: 100, output: 50 }, ms: 300 });
+  const on = await serve({ ai: createAI(createMockProvider()), usage });
+  const off = await serve({ ai: createAI(createMockProvider()) });
+  try {
+    const body = await (await on.call('/api/usage')).json();
+    assert.equal(body.total.calls, 1); assert.ok(body.byTool.review_answer); assert.ok(!JSON.stringify(body).includes('cv'));
+    assert.equal((await off.call('/api/usage')).status, 404);
+  } finally { await on.close(); await off.close(); }
+});
+
+test('cache prefix (tools, system, CV block) is byte-identical across different AI calls', async () => {
+  const bodies = [];
+  const provider = createAnthropicProvider({ apiKey: 'k', log: { info() {} }, fetchImpl: async (url, init) => { bodies.push(JSON.parse(init.body)); return new Response(JSON.stringify({ content: [{ type: 'tool_use', name: 'report_match', input: { requirements: [] } }], usage: {} }), { status: 200 }); } });
+  const ai = createAI(provider);
+  await ai.match({ cv: sampleCV, jd: sampleJD });
+  await ai.gapQuestions({ cv: sampleCV, jd: sampleJD, requirement: { name: 'Terraform', source: '' } }).catch(() => {});
+  await ai.scanSummary({ cv: sampleCV, scan: { score: 1, parts: { parse: { score: 1, checks: [] }, impact: { score: 1, quantified: 0, total: 0, weak: 0 }, readability: { score: 1, buzzwords: [] }, coverage: { score: 1, found: [], total: 0, role: 'x', missing: [] } } } }).catch(() => {});
+  assert.equal(bodies.length, 3);
+  const prefix = (b) => JSON.stringify([b.tools, b.system, b.messages[0].content[0]]);
+  assert.equal(prefix(bodies[0]), prefix(bodies[1]));
+  assert.equal(prefix(bodies[0]), prefix(bodies[2]));
+  assert.equal(bodies[0].messages[0].content[0].cache_control.type, 'ephemeral');
+  assert.ok(bodies[0].messages[0].content[0].text.startsWith('<cv>'));
+  // Different tiers use different models, so their caches are separate — match is quality, the other two are fast.
+  assert.equal(bodies[0].model, 'claude-sonnet-5-5'); assert.equal(bodies[1].model, 'claude-haiku-5-5');
+});
