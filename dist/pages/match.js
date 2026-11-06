@@ -122,10 +122,11 @@ export function bind({ loadSample, rebind }) {
       const result = await api.match(input.cv, input.jd);
       setSources(input);
       session.isSample = false;
-      state.requirements = result.requirements; state.matchMeta = result.meta; save();
+      state.requirements = result.requirements; state.matchMeta = result.meta; state.questions = null; save();
       showResults();
       const score = evidenceScore(result.requirements);
       toast(score ? `Evidence Score ${score.score}. ${score.gap} requirement${score.gap === 1 ? '' : 's'} missing.` : 'No requirements found.');
+      if (can('questions')) api.generateQuestions({ level: 'technical' }); // start writing the interview set now, so the room is ready
     });
   };
 

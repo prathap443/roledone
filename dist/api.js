@@ -50,3 +50,24 @@ export const questions = ({ cv, jd, requirements, level, count }) => request('/a
 export const gapQuestions = ({ cv, jd, requirement }) => request('/api/gap-questions', { cv, jd, requirement: { name: requirement.name, source: requirement.source || '' } });
 export const gapBullet = ({ cv, requirement, questions, answers, otherGaps }) => request('/api/gap-bullet', { cv, requirement: { name: requirement.name }, questions, answers, otherGaps: otherGaps.map((r) => ({ name: r.name, status: r.status })) });
 export const scanSummary = ({ cv, scan }) => request('/api/scan-summary', { cv, scan });
+
+/**
+ * Write the interview set for the current role in the background and store it.
+ * Safe to call repeatedly: a run already in flight is reused. Resolves to the questions or null.
+ */
+export function generateQuestions({ level, count, force = false } = {}) {
+  if (!aiAvailable() || !state.cv || !state.jd) return Promise.resolve(null);
+  if (!force && state.questions?.length) return Promise.resolve(state.questions);
+  if (session.questionsPending) return session.questionsPending;
+  const lvl = level || state.questionLevel || 'technical', n = count || Number(state.questionCount) || 5;
+  const reqs = (state.requirements || []).map((r) => ({ name: r.name, status: r.status }));
+  session.questionsPending = questions({ cv: state.cv, jd: state.jd, requirements: reqs, level: lvl, count: n })
+    .then((result) => {
+      if (!result.questions?.length) return null;
+      state.questions = result.questions; state.questionLevel = lvl; state.questionCount = n; state.answers = {}; state.feedback = {}; session.question = 0; save();
+      return state.questions;
+    })
+    .catch(() => null)
+    .finally(() => { session.questionsPending = null; });
+  return session.questionsPending;
+}

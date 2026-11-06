@@ -23,6 +23,10 @@ export function render() {
       + `<section class="panel">${locked({ plan: needs('questions'), title: 'Interview questions written for this role', body: `${api.aiAvailable() ? api.providerLabel() : 'Roledone'} writes questions from the actual requirements and your actual CV: depth on what you have, honest probes on what is missing, and a behavioural question from the advert. Then reviews your answers for structure.` })}</section>`;
   }
   const ai = api.aiAvailable();
+  if (ai && !state.questions?.length) {
+    return heading('03 / GET READY', 'Preparation, without the pressure.', 'Questions written for this role and your CV.') + `
+<section class="panel writing"><span class="spinner" aria-hidden="true"></span> <strong>Writing ${state.questionCount || 5} ${LEVELS[state.questionLevel || 'technical'].toLowerCase()} questions from the job description and your CV…</strong><p class="hint">Usually 10–30 seconds. You can carry on elsewhere; they will be here when you come back.</p></section>`;
+  }
   const qs = questionSet();
   const q = Math.min(session.question, qs.length - 1);
   const cur = qs[q];
@@ -69,6 +73,11 @@ function renderFeedback(fb, cur) {
 
 export function bind({ render: rerender }) {
   if (!can('questions') || !state.cv || !state.jd) return;
+  if (api.aiAvailable() && !state.questions?.length) {
+    // Prefetch from the role match may still be running; otherwise start now. Re-render when it lands.
+    api.generateQuestions().then((qs) => { if (session.page === 'interview') { if (qs) rerender(); else toast('Could not write questions. Try again from the Interview room.'); } });
+    return;
+  }
   const qs = questionSet();
   const q = Math.min(session.question, qs.length - 1);
   $$('[data-question]').forEach((b) => (b.onclick = () => { session.question = Number(b.dataset.question); rerender(); }));
@@ -82,11 +91,10 @@ export function bind({ render: rerender }) {
     if (!(await api.ensureConsent())) return;
     const count = Number(state.questionCount) || 5;
     await busy(button, count > 10 ? 'Writing a full round, this takes a moment…' : 'Writing questions…', async () => {
-      const result = await api.questions({ cv: state.cv, jd: state.jd, requirements: requirements(), level: state.questionLevel, count });
-      if (!result.questions.length) { toast('No questions came back. Try again.'); return; }
-      state.questions = result.questions; state.answers = {}; state.feedback = {}; session.question = 0; save();
+      const qs = await api.generateQuestions({ level: state.questionLevel, count, force: true });
+      if (!qs) { toast('No questions came back. Try again.'); return; }
       rerender();
-      toast(`${result.questions.length} questions written for the ${LEVELS[state.questionLevel].toLowerCase()}.`);
+      toast(`${qs.length} questions written for the ${LEVELS[state.questionLevel].toLowerCase()}.`);
     });
   });
 

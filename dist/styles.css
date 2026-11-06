@@ -141,3 +141,4 @@ dialog:has(.plan-table){max-width:640px}
 .question-dots{flex-wrap:wrap}
 .question-dots.dense button{width:34px;height:34px;font-size:12px}
 .hint.progress{margin:-8px 0 16px}
+.panel.writing{display:flex;flex-wrap:wrap;align-items:center;gap:12px;font-size:14px}.panel.writing .hint{width:100%;margin:0}
