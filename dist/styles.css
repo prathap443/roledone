@@ -268,3 +268,41 @@ dialog::backdrop{background:radial-gradient(800px 400px at 50% 0%,rgba(216,243,1
 .preview-frame iframe{box-shadow:0 30px 60px -24px rgba(10,24,18,.45),0 0 0 1px rgba(25,44,38,.06)}
 
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}.score-ring{--p:var(--target)}}
+
+/* ---- Jobs: search, cards, carousel ---- */
+.jobs-search{display:grid;grid-template-columns:2fr 1.2fr 1fr auto;gap:12px;align-items:end}
+.jobs-search .field{margin:0}.jobs-search .field input,.jobs-search .field select{height:44px}
+.jobs-search .primary{height:44px;white-space:nowrap}
+.jobs-results{margin-top:22px}
+.job-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+.job-card{display:flex;flex-direction:column;gap:12px;background:#fff;border:1px solid #e6e9df;border-radius:18px;padding:20px;box-shadow:var(--shadow-card);transition:transform .18s var(--ease),box-shadow .18s var(--ease);min-width:0}
+.job-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-float)}
+.job-card header{display:flex;gap:12px;align-items:center;min-width:0}
+.job-card header div{min-width:0}
+.job-card h3{margin:0;font-family:'Manrope',sans-serif;font-size:16px;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.job-card header p{margin:2px 0 0;color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.job-logo{flex-shrink:0;display:grid;place-items:center;width:44px;height:44px;border-radius:50%;font-family:'Manrope',sans-serif;font-weight:800;font-size:15px;color:#fff;background:hsl(var(--h) 45% 42%);box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 6px 14px -8px hsl(var(--h) 45% 30%)}
+.job-facts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px;font-size:13.5px;font-weight:500}
+.job-facts li{display:flex;gap:8px;align-items:center}
+.job-facts span{color:var(--muted);width:14px;text-align:center}
+.job-summary{margin:0;color:#4b544c;font-size:14px;line-height:1.55;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.job-tags{display:flex;gap:6px;flex-wrap:wrap}
+.job-tags .tag.muted{background:#f3f6ec;color:var(--muted)}
+.job-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:4px}
+.job-actions .small{padding:9px 13px;font-size:13px}
+a.secondary{text-decoration:none;display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:10px;color:var(--ink);font-weight:600}
+.job-banner{display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:#eef3dc;border:1px solid #d6e2b4;border-radius:12px;padding:12px 16px;margin:0 0 16px;font-size:14px}
+.job-banner a{color:var(--green);font-weight:600}.job-banner em{color:#5b5a24;font-style:normal;flex-basis:100%}
+.featured{margin:26px 0 8px}
+.carousel-wrap{position:relative}
+.carousel{display:flex;gap:16px;overflow-x:auto;scroll-snap-type:x mandatory;padding:6px 4px 14px;scrollbar-width:none}
+.carousel::-webkit-scrollbar{display:none}
+.carousel .job-card{flex:0 0 min(320px,85vw);scroll-snap-align:start}
+.carousel .job-card.compact .job-summary{-webkit-line-clamp:2}
+.carousel-nav{position:absolute;top:50%;transform:translateY(-50%);z-index:2;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:#fff;box-shadow:var(--shadow-card);font-size:22px;line-height:1;display:grid;place-items:center;color:var(--ink)}
+.carousel-nav.prev{left:-14px}.carousel-nav.next{right:-14px}
+.carousel-nav:hover{background:var(--lime)}
+.job-card.skeleton{min-height:230px;background:linear-gradient(90deg,#fff 0%,#f3f6ec 50%,#fff 100%);background-size:200% 100%;animation:shimmer 1.2s linear infinite;border-color:#eef1e8}
+@keyframes shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+.footer-link{color:var(--green);text-decoration:none;font-weight:600}
+@media(max-width:800px){.jobs-search{grid-template-columns:1fr 1fr}.jobs-search .primary{grid-column:1/-1}.carousel-nav{display:none}}

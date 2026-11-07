@@ -195,3 +195,26 @@ test('gap bullet: a bare Yes on a listed-only skill gets one follow-up, then dra
     assert.equal(second.verdict, 'supported'); assert.match(second.bullet, /retail sales/);
   } finally { await close(); }
 });
+
+test('jobs endpoint and server-rendered blog pages', async () => {
+  const { createMockJobs } = await import('../server/jobs.mjs');
+  const { createBlog } = await import('../server/blog.mjs');
+  const blog = createBlog({ posts: [{ slug: 'hello', title: 'Hello', description: 'd', date: '2026-01-01', tags: ['x'], level: '', minutes: 3, html: '<p>hi</p>' }], siteUrl: 'https://t.example' });
+  const { call, close } = await serve({ ai: createAI(null), jobs: createMockJobs(), blog });
+  try {
+    const f = await (await call('/api/jobs?featured=1')).json();
+    assert.ok(f.jobs.length >= 5); assert.equal(f.source, 'Sample');
+    const s = await (await call('/api/jobs?q=agent')).json();
+    assert.equal(s.jobs.length, 1); assert.ok(s.countries);
+    for (const [path, type, needle] of [['/blog', 'text/html', '/blog/hello'], ['/blog/hello', 'text/html', '<p>hi</p>'], ['/sitemap.xml', 'application/xml', '/blog/hello'], ['/robots.txt', 'text/plain', 'Sitemap:']]) {
+      const res = await call(path); assert.equal(res.status, 200, path); assert.match(res.headers.get('content-type'), new RegExp(type)); assert.match(await res.text(), new RegExp(needle));
+    }
+    assert.equal((await call('/blog/nope')).status, 404);
+    assert.equal((await call('/blog/../server.mjs')).status, 404);
+  } finally { await close(); }
+});
+
+test('jobs endpoint is 404 when not configured', async () => {
+  const { call, close } = await serve({ ai: createAI(null) });
+  try { assert.equal((await call('/api/jobs?q=x')).status, 404); assert.equal((await call('/blog')).status, 404); } finally { await close(); }
+});

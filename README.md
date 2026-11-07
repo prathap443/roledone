@@ -100,3 +100,8 @@ Upload/import this repository into a Node.js Replit project and use `npm start`.
 - `.openai/hosting.json`: private Sites deployment identity.
 
 Keep secrets out of source control. Before accepting real customer uploads, implement and test authentication, per-user authorisation, deletion, file handling, and server-side AI validation.
+
+## Jobs and the blog
+
+- **Jobs** (`#jobs`, and the Featured roles carousel on Overview) search live adverts through `GET /api/jobs`. Set `ADZUNA_APP_ID` and `ADZUNA_APP_KEY` for Adzuna (UK, US, 17 more countries, salaries); without them Arbeitnow is used (no key). "Scan my CV for this role" drops the advert into Role match. Only the search words go to the job source, never the CV.
+- **Blog** is server-rendered from `content/blog/*.md` at `/blog` and `/blog/<slug>` (plus `/sitemap.xml` and `/robots.txt`). Add a post: create `content/blog/YYYY-MM-DD-slug.md` with `title`, `description`, `date`, `tags`, optional `level` in the frontmatter, commit, redeploy. Markdown supports headings, lists, code fences, tables, quotes and links.

@@ -13,6 +13,7 @@ export function render() {
 <div class="notice">${ai
     ? `${api.providerLabel()} reads the job description, lists its requirements, and quotes the lines in your CV that support each one. Your Evidence Score is how much of the role your CV already covers — a coverage measure, not an ATS score or a hiring prediction.`
     : 'AI analysis is not connected on this server, so matching checks a small, fixed skill vocabulary. A mention is not verified proficiency, an ATS score, or a prediction of hiring outcomes.'}</div>
+${session.job && state.jd && state.jd.startsWith(session.job.title) ? `<div class="job-banner"><span>Matching <strong>${esc(session.job.title)}</strong> at ${esc(session.job.company)}</span>${session.job.url ? `<a href="${esc(session.job.url)}" target="_blank" rel="noopener">View the advert ↗</a>` : ''}${session.job.partial ? '<em>Only a summary was available — paste the full advert below for the best match.</em>' : ''}</div>` : ''}
 <form id="match-form"><div class="two-col">
  <section class="panel"><h2>Your experience</h2>
   <label class="field">CV text<textarea id="cv" required maxlength="50000" placeholder="Paste your CV here…">${esc(state.cv)}</textarea></label>
@@ -25,7 +26,7 @@ export function render() {
   <p class="hint">Include the technical requirements and responsibilities. Review the original advert for anything the analysis may miss.</p>
   <div class="actions">
    ${ai ? '<button class="primary" type="submit" id="match-ai">Scan my CV for this role ✧</button><button class="secondary" type="button" id="match-local">Quick text check (no AI)</button>' : '<button class="primary" type="submit" id="match-local">Find the connections ↗</button>'}
-   ${blank ? '<button class="secondary" type="button" id="sample">Try a sample instead</button>' : ''}
+   ${blank ? '<button class="secondary" type="button" id="sample">Try a sample instead</button><button class="secondary" type="button" data-page="jobs">Find a live role ↗</button>' : ''}
   </div>
   ${blank ? '' : '<p class="hint">No CV to hand? Clear both boxes to try the fictional sample.</p>'}
  </section>

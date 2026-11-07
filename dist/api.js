@@ -98,3 +98,7 @@ export function generateQuestions({ level, count, force = false } = {}) {
   return session.questionsPending;
 }
 export const structure = ({ cv }) => request('/api/structure', { cv });
+
+/** Job search (GET). `params` is a URLSearchParams. */
+export const jobs = (params) => request(`/api/jobs?${params}`);
+export const featuredJobs = (country = 'gb') => request(`/api/jobs?featured=1&country=${encodeURIComponent(country)}`);

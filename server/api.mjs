@@ -72,7 +72,7 @@ const RANK_FALLBACK = { free: 0, pro: 1, premium: 2 };
 /** Minimum plan per AI endpoint. Scan summary stays free: it is the conversion hook. */
 const REQUIRED_PLAN = { '/api/suggestions': 'pro', '/api/gap-questions': 'pro', '/api/gap-bullet': 'pro', '/api/questions': 'pro', '/api/feedback': 'pro', '/api/structure': 'pro' };
 
-export function createHandler({ ai, root = resolve('dist'), rateLimit = createRateLimiter(), log = console, usage = null, billing = null, auth = null, adminEmails = (process.env.ROLEDONE_ADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean) } = {}) {
+export function createHandler({ ai, root = resolve('dist'), rateLimit = createRateLimiter(), log = console, usage = null, billing = null, auth = null, jobs = null, blog = null, adminEmails = (process.env.ROLEDONE_ADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean) } = {}) {
   const CSP = csp({ connect: auth ? [new URL(auth.publicConfig.url).origin] : [] });
   const send = (res, status, body, headers = {}) => {
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers });
@@ -177,6 +177,12 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
       }
       throw new HttpError(404, 'Unknown endpoint');
     }
+    if (pathname === '/api/jobs' && req.method === 'GET') {
+      if (!jobs) throw new HttpError(404, 'Job search is not enabled on this server');
+      const q = new URL(req.url, 'http://localhost').searchParams;
+      if (q.get('featured') === '1') return send(res, 200, await jobs.featured({ country: q.get('country') || 'gb' }), { 'Cache-Control': 'public, max-age=600' });
+      return send(res, 200, { ...(await jobs.search({ q: q.get('q') || '', where: q.get('where') || '', country: q.get('country') || 'gb', page: q.get('page') || 1 })), countries: jobs.countries }, { 'Cache-Control': 'public, max-age=300' });
+    }
     if (pathname === '/api/usage' && req.method === 'GET') {
       // Aggregate token/cost/latency figures since the server started. No document content, no per-user data.
       if (!usage) throw new HttpError(404, 'Usage accounting is not enabled');
@@ -257,9 +263,21 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
     } catch { res.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found'); }
   }
 
+  /** Server-rendered pages: the blog, sitemap and robots. */
+  function page(req, res, pathname) {
+    const html = (status, body) => res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': CSP, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'public, max-age=300' }).end(body);
+    if (pathname === '/sitemap.xml') return res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }).end(blog.sitemap());
+    if (pathname === '/robots.txt') return res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }).end(blog.robots());
+    if (pathname === '/blog' || pathname === '/blog/') return html(200, blog.index());
+    const slug = pathname.slice('/blog/'.length).replace(/\/$/, '');
+    const body = /^[a-z0-9-]+$/.test(slug) ? blog.post(slug) : null;
+    return body ? html(200, body) : html(404, blog.index());
+  }
+
   return async (req, res) => {
     let pathname;
     try { pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); } catch { res.writeHead(400).end(); return; }
+    if (blog && (pathname === '/blog' || pathname === '/blog/' || pathname.startsWith('/blog/') || pathname === '/sitemap.xml' || pathname === '/robots.txt')) return page(req, res, pathname);
     if (!pathname.startsWith('/api/')) return staticFile(req, res, pathname);
     try {
       await api(req, res, pathname);

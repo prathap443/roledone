@@ -14,9 +14,10 @@ import * as editor from './pages/editor.js';
 import * as interview from './pages/interview.js';
 import * as applications from './pages/applications.js';
 import * as templates from './pages/templates.js';
+import * as jobs from './pages/jobs.js';
 
-const pages = { overview, scan, match, editor, interview, applications, templates };
-const names = { overview: 'Overview', scan: 'CV scan', match: 'Role match', editor: 'CV studio', templates: 'Templates', interview: 'Interview room', applications: 'Applications' };
+const pages = { overview, scan, match, editor, interview, applications, templates, jobs };
+const names = { overview: 'Overview', scan: 'CV scan', match: 'Role match', editor: 'CV studio', templates: 'Templates', interview: 'Interview room', applications: 'Applications', jobs: 'Jobs' };
 
 setStorageErrorHandler(() => toast('Storage is unavailable. Your work remains in this tab.'));
 load();
@@ -152,7 +153,7 @@ function render() {
   });
   $('#main').innerHTML = pages[session.page].render();
   rebind();
-  pages[session.page].bind({ loadSample, rebind, render });
+  pages[session.page].bind({ loadSample, rebind, render, navigate });
 }
 
 function renderStatus() {

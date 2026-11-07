@@ -2,7 +2,11 @@ import { state, requirements } from '../state.js';
 import { evidenceScore } from '../core.js';
 import { plan, PLANS } from '../plans.js';
 import { heading } from '../ui.js';
-import { aiAvailable, providerLabel } from '../api.js';
+import { aiAvailable, providerLabel, featuredJobs } from '../api.js';
+import { jobCard, bindScan } from './jobs.js';
+import { $, $$ } from '../ui.js';
+
+let featured = null; // cached for the session
 
 const two = (n) => String(n).padStart(2, '0');
 
@@ -17,6 +21,7 @@ export function render() {
  <div class="metric"><div class="metric-top"><span>Answers practised</span><span>◌</span></div><strong>${two(practised)}</strong><small>Your interview preparation</small></div>
  <div class="metric"><div class="metric-top"><span>Applications tracked</span><span>↗</span></div><strong>${two(state.applications.length)}</strong><small>Your next opportunities</small></div>
 </section>
+<section class="featured" id="featured"><div class="section-heading"><h2>Featured roles</h2><span><button class="text-button" data-page="jobs">Search all roles ↗</button></span></div><div class="carousel-wrap"><button class="carousel-nav prev" id="car-prev" aria-label="Previous roles">‹</button><div class="carousel" id="carousel">${featured ? featured.map((j) => jobCard(j, { compact: true })).join('') : '<div class="job-card compact skeleton"></div><div class="job-card compact skeleton"></div><div class="job-card compact skeleton"></div><div class="job-card compact skeleton"></div>'}</div><button class="carousel-nav next" id="car-next" aria-label="Next roles">›</button></div></section>
 <div class="lower-grid">
  <section><div class="section-heading"><h2>A clearer path forward</h2><span>YOUR NEXT STEPS</span></div><div class="panel">
   <div class="journey-row"><span class="step-no">00</span><div><h3>See how your CV reads</h3><p>A scored report in seconds: structure, impact, readability, coverage.</p></div><button data-page="scan" aria-label="Open CV scan">↗</button></div>
@@ -29,6 +34,16 @@ export function render() {
 <div class="bottom-note">◇ ${aiAvailable() ? `${providerLabel()} analysis is available. Your text is only sent when you ask for it, and never stored by Roledone.` : 'Your CV stays in this tab unless you choose to save it on this device. No AI requests are sent.'}</div>`;
 }
 
-export function bind({ loadSample }) {
+export function bind({ loadSample, navigate, rebind }) {
   document.getElementById('demo')?.addEventListener('click', loadSample);
+  const paint = () => {
+    const c = $('#carousel'); if (!c) return;
+    c.innerHTML = featured.length ? featured.map((j) => jobCard(j, { compact: true })).join('') : '<p class="hint">No roles to show right now. <button class="text-button" data-page="jobs">Search roles</button></p>';
+    rebind(c); bindScan(featured, navigate);
+  };
+  if (featured) paint();
+  else featuredJobs().then((r) => { featured = r.jobs || []; paint(); }).catch(() => { featured = []; paint(); });
+  const step = () => Math.max(260, ($('#carousel')?.clientWidth || 900) * 0.6);
+  $('#car-prev').onclick = () => $('#carousel').scrollBy({ left: -step(), behavior: 'smooth' });
+  $('#car-next').onclick = () => $('#carousel').scrollBy({ left: step(), behavior: 'smooth' });
 }
