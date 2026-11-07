@@ -4,7 +4,7 @@
 import { sampleCV, sampleJD } from './core.js';
 import { state, session, load, save, reset, forget, setSources, setStorageErrorHandler, loadSourceDoc, stash } from './state.js';
 import { $, $$, esc, toast, modal, closeModal, confirm, download } from './ui.js';
-import { loadStatus, loadBilling, aiAvailable, providerLabel, billingEnabled, authEnabled, startCheckout, confirmCheckout, portal, setToken, getToken, attachDeviceSubscription } from './api.js';
+import { loadStatus, loadBilling, aiAvailable, providerLabel, billingEnabled, authEnabled, startCheckout, confirmCheckout, portal, setToken, getToken, attachDeviceSubscription, usageReport } from './api.js';
 import { sendMagicLink, signInWithGoogle, captureSessionFromUrl, signOut, currentUser } from './auth.js';
 import { PLANS, COMPARISON, plan } from './plans.js';
 import * as overview from './pages/overview.js';
@@ -38,7 +38,7 @@ function rebind(root = document) {
 
 const SELLABLE = ['pro']; // Premium goes on sale once its features exist
 
-function showPlans() {
+function showPlans({ quota = null } = {}) {
   const current = plan();
   const live = billingEnabled();
   const subscribed = Boolean(session.billing?.subscribed);
@@ -49,7 +49,7 @@ function showPlans() {
     if (!live || !available.includes(k) || !SELLABLE.includes(k)) return '<span class="hint">Coming soon</span>';
     return `<button class="primary small" data-checkout="${k}">Choose ${PLANS[k].label}</button>`;
   };
-  modal(`<div class="eyebrow">PLANS</div><h2>See where you stand for free. Pay to close the gap.</h2>
+  modal(`<div class="eyebrow">PLANS</div>${quota ? `<div class="quota-note"><strong>${quota.used} of ${quota.limit}</strong> ${quota.feature === 'match' ? 'role matches' : 'suggestion runs'} used this month on ${esc(PLANS[quota.plan]?.label || 'your')} plan. Your allowance resets on the 1st${quota.plan === 'free' ? ' — or upgrade now and keep going.' : '.'}</div>` : ''}<h2>See where you stand for free. Pay to close the gap.</h2>
 <p>Free scans a role and shows your Evidence Score and every missing requirement. Pro and Premium turn that into a stronger CV and a prepared interview.</p>
 <table class="plan-table"><thead><tr><th></th>${Object.entries(PLANS).map(([k, p]) => `<th class="${k === current ? 'current' : ''}">${p.label}<small>${p.price}</small></th>`).join('')}</tr></thead>
 <tbody>${COMPARISON.map(([f, ...cols]) => `<tr><td>${f}</td>${cols.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}
@@ -118,10 +118,31 @@ function showBilling() {
 ${b.subscribed ? `${b.source === 'device' ? (authEnabled() ? `<p class="hint">This subscription is tied to this browser. <button class="text-button" id="attach-now">Sign in to attach it to your account</button> so it works everywhere.</p>` : '<p class="hint">Your subscription is tied to this browser. Clearing site data or switching device loses access; keep your Stripe receipt.</p>') : `<p class="hint">On your account${currentUser()?.email ? ` (${esc(currentUser().email)})` : ''} — works on any device you sign in to.</p>`}
 <div class="actions"><button class="primary" id="manage-sub">Manage, change card or cancel ↗</button><button class="secondary" data-upgrade>Compare plans</button></div>`
   : `<div class="actions"><button class="primary lime" data-upgrade>See plans and upgrade ↗</button></div>`}
-${!b.subscribed && current !== 'free' ? `<p class="hint">You currently have ${esc(PLANS[current].label)} access through a server default${state.plan ? ' / developer preview' : ''}.</p>` : ''}`);
+${!b.subscribed && current !== 'free' ? `<p class="hint">You currently have ${esc(PLANS[current].label)} access through a server default${state.plan ? ' / developer preview' : ''}.</p>` : ''}
+${quotaHtml(b.quota)}${b.admin ? '<details class="developer" id="usage-panel"><summary>Usage &amp; cost this month (admin)</summary><div id="usage-body"><p class="hint">Loading…</p></div></details>' : ''}`);
+  $('#usage-panel')?.addEventListener('toggle', async (e) => { if (!e.currentTarget.open) return; try { $('#usage-body').innerHTML = usageHtml(await usageReport()); } catch (error) { $('#usage-body').innerHTML = `<p class="hint">${esc(error.message)}</p>`; } });
   $$('[data-upgrade]', $('#dialog')).forEach((x) => (x.onclick = showPlans));
   $('#attach-now')?.addEventListener('click', () => (currentUser() ? afterSignIn() : showSignIn({ reason: 'Sign in to attach the subscription on this device to your account.' })));
   $('#manage-sub')?.addEventListener('click', async (e) => { const button = e.currentTarget; button.disabled = true; try { const { url } = await portal(); stash(); location.href = url; } catch (error) { toast(error.message); button.disabled = false; } });
+}
+const FEATURE_LABEL = { match: 'Role matches', suggestions: 'CV suggestion runs' };
+function quotaHtml(q) {
+  if (!q?.features) return '';
+  const rows = Object.entries(q.features).filter(([f]) => FEATURE_LABEL[f]).map(([f, v]) => {
+    const pct = v.limit ? Math.min(100, Math.round(100 * v.used / v.limit)) : 0;
+    return `<div class="quota-row"><span>${FEATURE_LABEL[f]}</span><span class="quota-bar"><i style="width:${pct}%" class="${pct >= 100 ? 'full' : ''}"></i></span><span class="quota-num">${v.limit == null ? `${v.used} · unlimited` : v.limit === 0 ? 'Not on this plan' : `${v.used} / ${v.limit}`}</span></div>`;
+  }).join('');
+  return rows ? `<div class="quota"><div class="eyebrow">THIS MONTH</div>${rows}<p class="hint">Allowances reset on the 1st (UTC).</p></div>` : '';
+}
+function usageHtml(u) {
+  const money = (x) => `$${Number(x || 0).toFixed(3)}`;
+  const stored = Array.isArray(u.stored) && u.stored.length ? u.stored : null;
+  const rows = stored
+    ? stored.map((r) => `<tr><td>${esc(r.tool)}</td><td>${esc(String(r.model).replace('claude-', ''))}</td><td>${r.calls}</td><td>${Number(r.input).toLocaleString()}</td><td>${Number(r.cache_read).toLocaleString()}</td><td>${Number(r.output).toLocaleString()}</td><td>${money(r.usd)}</td></tr>`)
+    : Object.entries(u.byTool || {}).sort((a, b) => b[1].usd - a[1].usd).map(([t, r]) => `<tr><td>${esc(t)}</td><td>—</td><td>${r.calls}</td><td>${r.input.toLocaleString()}</td><td>${r.cacheRead.toLocaleString()}</td><td>${r.output.toLocaleString()}</td><td>${money(r.usd)}</td></tr>`);
+  const total = stored ? stored.reduce((s, r) => s + Number(r.usd), 0) : u.total?.usd || 0;
+  return `<p class="hint">${stored ? `Stored ledger for ${esc(u.month)} (all restarts).` : 'In-memory ledger since the last restart — run the 002_usage migration to keep history.'} Total <strong>${money(total)}</strong>.</p>
+<table class="usage-table"><thead><tr><th>Feature</th><th>Model</th><th>Calls</th><th>Input</th><th>Cached</th><th>Output</th><th>Cost</th></tr></thead><tbody>${rows.join('') || '<tr><td colspan="7">No calls yet.</td></tr>'}</tbody></table>`;
 }
 $('#plan-chip').onclick = showBilling;
 $('#profile-plan').onclick = showBilling;
@@ -214,7 +235,8 @@ ${session.billing?.subscribed ? '' : `<details class="developer"><summary>Develo
 };
 $('#mobile-settings').onclick = () => $('#settings').click();
 
-document.addEventListener('roledone:upgrade', showPlans);
+document.addEventListener('roledone:billing', () => { renderStatus(); const h = $('.quota-hint'); if (h) h.outerHTML = match.quotaHint(); rebind(); });
+document.addEventListener('roledone:upgrade', (e) => { loadBilling().then(renderStatus).catch(() => {}); showPlans(e.detail?.quota ? { quota: e.detail.quota } : {}); });
 
 window.addEventListener('hashchange', () => {
   const next = location.hash.slice(1);

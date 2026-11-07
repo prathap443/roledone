@@ -312,3 +312,16 @@ a.secondary{text-decoration:none;display:inline-flex;align-items:center;border:1
 .carousel-wrap::before,.carousel-wrap::after{content:'';position:absolute;top:0;bottom:0;width:48px;z-index:1;pointer-events:none}
 .carousel-wrap::before{left:0;background:linear-gradient(90deg,var(--paper),transparent)}
 .carousel-wrap::after{right:0;background:linear-gradient(270deg,var(--paper),transparent)}
+
+/* ---- Quota & usage ---- */
+.quota{margin:18px 0 6px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:#fbfcf7}
+.quota-row{display:grid;grid-template-columns:1.2fr 2fr auto;gap:12px;align-items:center;font-size:13.5px;margin:8px 0}
+.quota-bar{height:8px;border-radius:999px;background:#e6ebdc;overflow:hidden}
+.quota-bar i{display:block;height:100%;background:linear-gradient(90deg,#a9cf52,var(--lime));border-radius:999px;transition:width .4s var(--ease)}
+.quota-bar i.full{background:linear-gradient(90deg,#d98d5a,#c9623a)}
+.quota-num{color:var(--muted);white-space:nowrap}
+.quota-note{background:#fff3e6;border:1px solid #f0cfae;color:#6b3a12;border-radius:12px;padding:12px 14px;margin:0 0 14px;font-size:14px}
+.usage-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+.usage-table th,.usage-table td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line)}
+.usage-table th:first-child,.usage-table td:first-child,.usage-table th:nth-child(2),.usage-table td:nth-child(2){text-align:left}
+.quota-hint.warn{color:#8a3b12}

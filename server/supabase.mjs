@@ -21,6 +21,11 @@ export function createSupabase({ url, anonKey, serviceKey, fetchImpl = fetch, no
 
   return {
     publicConfig: { url: base, anonKey },
+    rest,
+    /** Append one AI call to usage_events (fire-and-forget by the caller). */
+    recordUsage(row) { return rest('POST', '/usage_events', { body: row, prefer: 'return=minimal' }); },
+    /** Per-tool totals for a month via the usage_summary function. */
+    usageSummary(month) { return rest('POST', '/rpc/usage_summary', { body: { p_month: month } }); },
 
     /** Resolve a Supabase access token to { id, email } or null. Cached briefly per token. */
     async userFromToken(token) {

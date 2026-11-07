@@ -5,6 +5,8 @@ import { readFile } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
 import { LIMITS, isLogistics } from './validate.mjs';
 import { planFromRow } from './supabase.mjs';
+import { METERED } from './meter.mjs';
+import { usageContext } from './usage.mjs';
 
 const MAX_BODY = 256 * 1024;
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.wasm': 'application/wasm', '.svg': 'image/svg+xml', '.json': 'application/json', '.bcmap': 'application/octet-stream', '.pfb': 'application/octet-stream', '.ttf': 'font/ttf' };
@@ -72,7 +74,7 @@ const RANK_FALLBACK = { free: 0, pro: 1, premium: 2 };
 /** Minimum plan per AI endpoint. Scan summary stays free: it is the conversion hook. */
 const REQUIRED_PLAN = { '/api/suggestions': 'pro', '/api/gap-questions': 'pro', '/api/gap-bullet': 'pro', '/api/questions': 'pro', '/api/feedback': 'pro', '/api/structure': 'pro' };
 
-export function createHandler({ ai, root = resolve('dist'), rateLimit = createRateLimiter(), log = console, usage = null, billing = null, auth = null, jobs = null, blog = null, adminEmails = (process.env.ROLEDONE_ADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean) } = {}) {
+export function createHandler({ ai, root = resolve('dist'), rateLimit = createRateLimiter(), log = console, usage = null, billing = null, auth = null, jobs = null, blog = null, meter = null, adminEmails = (process.env.ROLEDONE_ADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean) } = {}) {
   const CSP = csp({ connect: auth ? [new URL(auth.publicConfig.url).origin] : [] });
   const send = (res, status, body, headers = {}) => {
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers });
@@ -110,7 +112,8 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
     if (pathname === '/api/status' && req.method === 'GET') return send(res, 200, { ...ai.status(), billing: Boolean(billing), plans: billing ? Object.keys(billing.stripe.prices) : [], auth: auth ? auth.publicConfig : null });
     if (pathname === '/api/me' && req.method === 'GET') {
       const e = await planFor(req);
-      return send(res, 200, { user: e.user, plan: e.plan, source: e.source, status: e.status, renews: e.periodEnd, subscribed: Boolean(e.subscription || e.claims), admin: Boolean(e.admin) });
+      const quota = meter ? await meter.summary({ subject: meter.subjectFor(req, e.user), plan: e.plan, admin: Boolean(e.admin) }) : null;
+      return send(res, 200, { user: e.user, plan: e.plan, source: e.source, status: e.status, renews: e.periodEnd, subscribed: Boolean(e.subscription || e.claims), admin: Boolean(e.admin), quota });
     }
 
     if (pathname === '/api/stripe/webhook' && req.method === 'POST') {
@@ -186,7 +189,11 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
     if (pathname === '/api/usage' && req.method === 'GET') {
       // Aggregate token/cost/latency figures since the server started. No document content, no per-user data.
       if (!usage) throw new HttpError(404, 'Usage accounting is not enabled');
-      return send(res, 200, usage.summary());
+      const e = await planFor(req);
+      if (!e.admin) throw new HttpError(403, 'Admin only');
+      const month = new URL(req.url, 'http://localhost').searchParams.get('month') || new Date().toISOString().slice(0, 7);
+      const stored = auth?.usageSummary ? await auth.usageSummary(month).catch(() => null) : null;
+      return send(res, 200, { ...usage.summary(), month, stored });
     }
     if (req.method !== 'POST') throw new HttpError(405, 'Method not allowed');
     if (!ai.provider) throw new HttpError(503, 'AI is not configured on this server. Set ANTHROPIC_API_KEY to enable it.');
@@ -196,12 +203,31 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
     if (!quota.allowed) throw new HttpError(429, 'Too many requests. Try again in a few minutes.');
 
     const required = REQUIRED_PLAN[pathname];
+    const feature = METERED[pathname];
+    let ent = null;
+    if ((required && billing) || (feature && meter)) ent = await planFor(req);
     if (required && billing) { // without billing there is nothing to buy, so nothing to gate
-      const { plan } = await planFor(req);
-      if ((RANK_FALLBACK[plan] ?? 0) < RANK_FALLBACK[required]) throw new HttpError(402, `This needs the ${required[0].toUpperCase() + required.slice(1)} plan.`);
+      if ((RANK_FALLBACK[ent.plan] ?? 0) < RANK_FALLBACK[required]) throw new HttpError(402, `This needs the ${required[0].toUpperCase() + required.slice(1)} plan.`);
     }
+    let metered = null;
+    if (feature && meter) {
+      const subject = meter.subjectFor(req, ent.user);
+      const q = await meter.check({ subject, plan: ent.plan, feature, admin: Boolean(ent.admin) });
+      if (!q.allowed) {
+        const err = new HttpError(402, ent.plan === 'free' ? `You have used your ${q.limit} free ${feature === 'match' ? 'role matches' : 'suggestion runs'} this month. Upgrade to keep going.` : `You have reached this month's limit of ${q.limit} ${feature === 'match' ? 'role matches' : 'suggestion runs'} on the ${ent.plan[0].toUpperCase() + ent.plan.slice(1)} plan.`);
+        err.extra = { code: 'quota', feature, used: q.used, limit: q.limit, plan: ent.plan };
+        throw err;
+      }
+      metered = { subject, feature };
+    }
+    const ctx = { subject: metered?.subject || (ent ? meter?.subjectFor(req, ent.user) : null) || null, plan: ent?.plan || null };
+    const out = await usageContext.run(ctx, () => aiCall(req, res, pathname, metered));
+    return out;
+  }
 
+  async function aiCall(req, res, pathname, metered) {
     const body = await readJson(req);
+    if (metered) res.once('finish', () => { if (res.statusCode === 200) meter.bump(metered).catch((e) => log.error(`[meter] bump failed: ${e.message}`)); }); // count successful calls only
     if (pathname === '/api/match') {
       const cv = text(body.cv, LIMITS.text, 'cv'), jd = text(body.jd, LIMITS.text, 'jd');
       return send(res, 200, await ai.match({ cv, jd }));
@@ -284,7 +310,7 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
     } catch (error) {
       const status = error.status || 500;
       if (status >= 500) log.error(`[api] ${req.method} ${pathname} -> ${status}: ${error.message}`); // message only, never bodies
-      send(res, status, { error: status >= 500 && !error.status ? 'Something went wrong on the server.' : error.message });
+      send(res, status, { error: status >= 500 && !error.status ? 'Something went wrong on the server.' : error.message, ...(error.extra || {}) });
     }
   };
 }

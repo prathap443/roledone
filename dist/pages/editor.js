@@ -106,6 +106,7 @@ export function bind({ rebind }) {
     if (!(await api.ensureConsent())) return;
     await busy(button, 'Reading your draft…', async () => {
       const result = await api.suggestions({ cv: state.cv, draft: draftArea.value, jd: state.jd, requirements: requirements() });
+      api.loadBilling().then(() => document.dispatchEvent(new CustomEvent('roledone:billing'))).catch(() => {}); // quota moved
       state.suggestions = result.suggestions; state.dismissed = []; state.applied = []; save();
       refresh();
       $('#suggestions').scrollIntoView({ behavior: 'smooth', block: 'start' });

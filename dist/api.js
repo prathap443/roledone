@@ -6,19 +6,22 @@ import { accessToken, configureAuth } from './auth.js';
 
 const TOKEN_KEY = 'roledone-token';
 export const getToken = () => { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } };
+/** Stable anonymous id for monthly free-tier metering (an account id takes over once signed in). */
+const DEVICE_KEY = 'roledone-device';
+export const deviceId = () => { try { let d = localStorage.getItem(DEVICE_KEY); if (!/^[A-Za-z0-9_-]{16,64}$/.test(d || '')) { d = crypto.randomUUID().replace(/-/g, ''); localStorage.setItem(DEVICE_KEY, d); } return d; } catch { return ''; } };
 export const setToken = (t) => { try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ } };
 
 async function request(path, body) {
   let res;
   const jwt = await accessToken();
-  const headers = { ...(getToken() ? { 'x-roledone-token': getToken() } : {}), ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}) };
+  const headers = { ...(getToken() ? { 'x-roledone-token': getToken() } : {}), ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}), ...(deviceId() ? { 'x-roledone-device': deviceId() } : {}) };
   try {
     res = await fetch(path, body ? { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) } : { headers });
   } catch {
     throw new Error('Could not reach the Roledone server. Check your connection and try again.');
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) { const err = new Error(data.error || `Request failed (${res.status})`); err.status = res.status; throw err; }
+  if (!res.ok) { const err = new Error(data.error || `Request failed (${res.status})`); err.status = res.status; if (data.code) Object.assign(err, { code: data.code, feature: data.feature, used: data.used, limit: data.limit, plan: data.plan }); throw err; }
   return data;
 }
 
@@ -26,11 +29,10 @@ export const billingEnabled = () => Boolean(session.ai?.billing);
 export async function loadBilling() {
   session.billing = { plan: null, subscribed: false };
   session.me = null;
-  if (!billingEnabled() && !authEnabled()) return session.billing;
   try {
     const me = await request('/api/me');
     session.me = me.user;
-    session.billing = { plan: me.plan, status: me.status, renews: me.renews, subscribed: me.subscribed, source: me.source, admin: me.admin };
+    session.billing = { plan: me.plan, status: me.status, renews: me.renews, subscribed: me.subscribed, source: me.source, admin: me.admin, quota: me.quota };
   } catch { /* keep defaults */ }
   return session.billing;
 }
@@ -101,4 +103,5 @@ export const structure = ({ cv }) => request('/api/structure', { cv });
 
 /** Job search (GET). `params` is a URLSearchParams. */
 export const jobs = (params) => request(`/api/jobs?${params}`);
+export const usageReport = (month) => request(`/api/usage${month ? `?month=${encodeURIComponent(month)}` : ''}`);
 export const featuredJobs = (country = 'gb') => request(`/api/jobs?featured=1&country=${encodeURIComponent(country)}`);

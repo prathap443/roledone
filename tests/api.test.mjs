@@ -13,7 +13,7 @@ async function serve(options) {
   const server = http.createServer(createHandler({ log: quiet, ...options }));
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
-  const call = (path, body, init = {}) => fetch(base + path, body === undefined ? init : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), ...init });
+  const call = (path, body, init = {}) => fetch(base + path, body === undefined ? init : { method: 'POST', body: JSON.stringify(body), ...init, headers: { 'content-type': 'application/json', ...(init.headers || {}) } });
   return { call, close: () => new Promise((r) => server.close(r)) };
 }
 
@@ -154,17 +154,51 @@ test('anthropic adapter caches CV blocks, routes tiers, and drops effort when a 
   assert.equal(provider.usage.calls, 3); assert.equal(provider.usage.cacheRead, 15);
 });
 
-test('/api/usage exposes aggregates only, and 404s when accounting is off', async () => {
+const fakeAuth = (users = { admin: { id: 'u-admin', email: 'admin@example.com' }, alice: { id: 'u-alice', email: 'alice@example.com' } }) => ({
+  publicConfig: { url: 'https://x.supabase.co', anonKey: 'anon' },
+  async userFromToken(t) { return users[t] || null; },
+  async subscriptionForUser() { return null; },
+});
+const as = (token) => ({ headers: { authorization: `Bearer ${token}` } });
+
+test('/api/usage is admin-only, exposes aggregates only, and 404s when accounting is off', async () => {
   const { createUsage } = await import('../server/usage.mjs');
   const usage = createUsage({ env: {} });
   usage.record({ model: 'claude-haiku-5-5', tool: 'review_answer', tokens: { input: 100, output: 50 }, ms: 300 });
-  const on = await serve({ ai: createAI(createMockProvider()), usage });
+  const on = await serve({ ai: createAI(createMockProvider()), usage, auth: fakeAuth(), adminEmails: ['admin@example.com'] });
   const off = await serve({ ai: createAI(createMockProvider()) });
   try {
-    const body = await (await on.call('/api/usage')).json();
+    assert.equal((await on.call('/api/usage')).status, 403);
+    assert.equal((await on.call('/api/usage', undefined, as('alice'))).status, 403);
+    const body = await (await on.call('/api/usage', undefined, as('admin'))).json();
     assert.equal(body.total.calls, 1); assert.ok(body.byTool.review_answer); assert.ok(!JSON.stringify(body).includes('cv'));
     assert.equal((await off.call('/api/usage')).status, 404);
   } finally { await on.close(); await off.close(); }
+});
+
+test('metering: free users get 3 matches a month, then 402 with a quota payload; admins are unmetered', async () => {
+  const { createMeter, memoryStore } = await import('../server/meter.mjs');
+  const meter = createMeter({ store: memoryStore() });
+  const { call, close } = await serve({ ai: createAI(createMockProvider()), meter, auth: fakeAuth(), adminEmails: ['admin@example.com'] });
+  const dev = { headers: { 'x-roledone-device': 'device-aaaaaaaaaaaaaaaa' } };
+  try {
+    for (let i = 0; i < 3; i++) assert.equal((await call('/api/match', { cv: sampleCV, jd: sampleJD }, dev)).status, 200, `match ${i + 1}`);
+    const blocked = await call('/api/match', { cv: sampleCV, jd: sampleJD }, dev);
+    assert.equal(blocked.status, 402);
+    const body = await blocked.json();
+    assert.equal(body.code, 'quota'); assert.equal(body.used, 3); assert.equal(body.limit, 3); assert.match(body.error, /3 free role matches/);
+    // another device is a different subject
+    assert.equal((await call('/api/match', { cv: sampleCV, jd: sampleJD }, { headers: { 'x-roledone-device': 'device-bbbbbbbbbbbbbbbb' } })).status, 200);
+    // /api/me reports the quota
+    const me = await (await call('/api/me', undefined, dev)).json();
+    assert.deepEqual(me.quota.features.match, { used: 3, limit: 3 });
+    // admin: never blocked
+    for (let i = 0; i < 4; i++) assert.equal((await call('/api/match', { cv: sampleCV, jd: sampleJD }, as('admin'))).status, 200);
+    assert.equal((await (await call('/api/me', undefined, as('admin'))).json()).quota.features.match.limit, null);
+    // failed calls are not counted
+    assert.equal((await call('/api/match', { cv: '', jd: sampleJD }, { headers: { 'x-roledone-device': 'device-cccccccccccccccc' } })).status, 400);
+    assert.equal((await (await call('/api/me', undefined, { headers: { 'x-roledone-device': 'device-cccccccccccccccc' } })).json()).quota.features.match.used, 0);
+  } finally { await close(); }
 });
 
 test('cache prefix (tools, system, CV block) is byte-identical across different AI calls', async () => {

@@ -6,6 +6,14 @@ import { can, needs } from '../plans.js';
 import * as api from '../api.js';
 import { placeBullet, placeLearningLine } from '../place.js';
 
+/** “2 of 3 free matches left this month” — only when a limit applies. */
+export function quotaHint() {
+  const q = session.billing?.quota?.features?.match;
+  if (!q || q.limit == null) return '';
+  const left = Math.max(0, q.limit - q.used);
+  return `<p class="hint quota-hint ${left === 0 ? 'warn' : ''}">${left === 0 ? `You have used all ${q.limit} role matches this month. <button class="text-button" data-upgrade>See plans</button>` : `${left} of ${q.limit} role matches left this month${session.billing?.plan === 'free' ? ' on Free' : ''}.`}</p>`;
+}
+
 export function render() {
   const ai = api.aiAvailable();
   const blank = !state.cv && !state.jd;
@@ -28,7 +36,7 @@ ${session.job && state.jd && state.jd.startsWith(session.job.title) ? `<div clas
    ${ai ? '<button class="primary" type="submit" id="match-ai">Scan my CV for this role ✧</button><button class="secondary" type="button" id="match-local">Quick text check (no AI)</button>' : '<button class="primary" type="submit" id="match-local">Find the connections ↗</button>'}
    ${blank ? '<button class="secondary" type="button" id="sample">Try a sample instead</button><button class="secondary" type="button" data-page="jobs">Find a live role ↗</button>' : ''}
   </div>
-  ${blank ? '' : '<p class="hint">No CV to hand? Clear both boxes to try the fictional sample.</p>'}
+  ${blank ? '' : '<p class="hint">No CV to hand? Clear both boxes to try the fictional sample.</p>'}${quotaHint()}
  </section>
 </div></form>
 <div id="results" class="results">${state.cv && state.jd ? results() : ''}</div>`;
@@ -127,6 +135,7 @@ export function bind({ loadSample, rebind }) {
     if (!(await api.ensureConsent())) return;
     await busy(button, 'Reading the role…', async () => {
       const result = await api.match(input.cv, input.jd);
+      api.loadBilling().then(() => document.dispatchEvent(new CustomEvent('roledone:billing'))).catch(() => {}); // quota moved
       setSources(input);
       session.isSample = false;
       state.requirements = result.requirements; state.matchMeta = result.meta; state.questions = null; save();

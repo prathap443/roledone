@@ -105,3 +105,9 @@ Keep secrets out of source control. Before accepting real customer uploads, impl
 
 - **Jobs** (`#jobs`, and the Featured roles carousel on Overview) search live adverts through `GET /api/jobs`. Set `ADZUNA_APP_ID` and `ADZUNA_APP_KEY` for Adzuna (UK, US, 17 more countries, salaries); without them Arbeitnow is used (no key). "Scan my CV for this role" drops the advert into Role match. Only the search words go to the job source, never the CV.
 - **Blog** is server-rendered from `content/blog/*.md` at `/blog` and `/blog/<slug>` (plus `/sitemap.xml` and `/robots.txt`). Add a post: create `content/blog/YYYY-MM-DD-slug.md` with `title`, `description`, `date`, `tags`, optional `level` in the frontmatter, commit, redeploy. Markdown supports headings, lists, code fences, tables, quotes and links.
+
+## Metering and cost visibility
+
+Role match and CV suggestions (the two Sonnet calls) are metered per calendar month: Free 3 matches, Pro 60 matches + 60 suggestion runs, Premium 200 + 200 (`ROLEDONE_LIMITS` to change). Counted per account, else per device id, else per hashed IP. Admins are never metered. Over the cap the API returns 402 with `code: "quota"` and the app opens the plans dialog.
+
+Run `supabase/migrations/002_usage.sql` to keep counters and the AI usage ledger across restarts. Admins see per-feature cost for the month under Plan & billing → “Usage & cost this month”; `GET /api/usage` is admin-only.

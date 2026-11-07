@@ -37,12 +37,12 @@ export const needs = (feature) => PLANS[FEATURES[feature] || 'free'].label;
 
 /** Comparison rows for the upgrade dialog. */
 export const COMPARISON = [
-  ['Role scans and Evidence Score', '3 / month', 'Unlimited', 'Unlimited'],
+  ['Role matches with Evidence Score', '3 / month', '60 / month', '200 / month'],
   ['Requirement list with what is missing', '✓', '✓', '✓'],
-  ['CV suggestions you can apply', '—', 'Unlimited', 'Unlimited'],
+  ['CV suggestions you can apply', '—', '60 runs / month', '200 runs / month'],
   ['Gap Interview → new bullets from your answers', '—', '✓', '✓'],
   ['CV studio, four templates, Word / PDF export', '—', '✓', '✓'],
-  ['Interview questions written for this role', '—', 'Unlimited', 'Unlimited'],
+  ['Interview questions written for this role', '—', '✓', '✓'],
   ['Answer review (STAR)', '—', '✓', '✓'],
   ['Follow-up questions and mock session', '—', '—', '✓'],
   ['Multiple CV versions per role', '—', '—', '✓'],
