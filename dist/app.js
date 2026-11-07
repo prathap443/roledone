@@ -62,6 +62,27 @@ ${live ? `<label class="field">Email for your receipt<input type="email" id="che
   }));
 }
 
+/** Plan & billing: the one place a customer looks for their subscription. */
+function showBilling() {
+  const b = session.billing || {};
+  const current = plan();
+  const renews = b.renews ? new Date(b.renews).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : null;
+  const statusLine = b.subscribed
+    ? (b.status === 'past_due' ? 'Last payment failed — update your card to keep access.' : b.status === 'canceled' ? 'Cancelled. Access continues until the end of the period.' : renews ? `Renews on ${renews}.` : 'Active.')
+    : billingEnabled() ? 'You are on the Free plan: scan, score and see what is missing.' : 'Payments are not live yet.';
+  modal(`<div class="eyebrow">PLAN &amp; BILLING</div>
+<h2>${b.subscribed ? `${esc(PLANS[b.plan]?.label || 'Paid')} plan` : `${esc(PLANS[current].label)} plan`}</h2>
+<p>${esc(statusLine)}</p>
+${b.subscribed ? `<p class="hint">Your subscription is tied to this browser. Clearing site data or switching device loses access until sign-in arrives; keep your Stripe receipt.</p>
+<div class="actions"><button class="primary" id="manage-sub">Manage, change card or cancel ↗</button><button class="secondary" data-upgrade>Compare plans</button></div>`
+  : `<div class="actions"><button class="primary lime" data-upgrade>See plans and upgrade ↗</button></div>`}
+${!b.subscribed && current !== 'free' ? `<p class="hint">You currently have ${esc(PLANS[current].label)} access through a server default${state.plan ? ' / developer preview' : ''}.</p>` : ''}`);
+  $$('[data-upgrade]', $('#dialog')).forEach((x) => (x.onclick = showPlans));
+  $('#manage-sub')?.addEventListener('click', async (e) => { const button = e.currentTarget; button.disabled = true; try { const { url } = await portal(); stash(); location.href = url; } catch (error) { toast(error.message); button.disabled = false; } });
+}
+$('#plan-chip').onclick = showBilling;
+$('#profile-plan').onclick = showBilling;
+
 /** Returning from Stripe Checkout: confirm the session server-side and store the entitlement token. */
 async function handleCheckoutReturn() {
   const url = new URL(location.href);
@@ -97,7 +118,13 @@ function renderStatus() {
   dot.classList.toggle('on', aiAvailable());
   label.textContent = aiAvailable() ? `${providerLabel()} connected` : 'Browser-only prototype';
   label.title = aiAvailable() ? `AI analysis via ${session.ai.provider} (${session.ai.model}). Text is only sent when you ask.` : 'No AI provider configured on this server.';
-  $('.profile small').textContent = session.billing?.subscribed ? `${PLANS[session.billing.plan]?.label || 'Paid'} plan` : aiAvailable() ? 'AI-assisted workspace' : 'Local prototype';
+  const b = session.billing || {};
+  const current = plan();
+  $('.profile small').textContent = b.subscribed ? `${PLANS[b.plan]?.label || 'Paid'} plan · manage` : `${PLANS[current].label} plan${billingEnabled() && current === 'free' ? ' · see plans' : ''}`;
+  const chip = $('#plan-chip');
+  chip.textContent = b.subscribed ? `${PLANS[b.plan]?.label || 'Paid'}${b.status === 'past_due' ? ' · payment failed' : b.renews ? ` · renews ${new Date(b.renews).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}` : `${PLANS[current].label}${billingEnabled() && current === 'free' ? ' · See plans' : ''}`;
+  chip.classList.toggle('paid', Boolean(b.subscribed));
+  chip.classList.toggle('warn', b.status === 'past_due');
 }
 
 async function loadSample() {
@@ -123,14 +150,13 @@ $('#settings').onclick = () => {
 <p>Device saving stores CV text, drafts, answers, and applications in this browser’s local storage. This is not an encrypted document vault. Use a trusted device.</p>
 <label class="field"><span><input type="checkbox" id="remember" ${state.remember ? 'checked' : ''}> Save my workspace on this device</span></label>
 ${aiAvailable() ? `<label class="field"><span><input type="checkbox" id="consent" ${state.aiConsent ? 'checked' : ''}> Send text to ${esc(providerLabel())} without asking each time</span></label>` : ''}
-${session.billing?.subscribed ? `<p><strong>${esc(PLANS[session.billing.plan]?.label || 'Paid')} plan</strong> on this device${session.billing.renews ? ` · renews ${new Date(session.billing.renews).toLocaleDateString('en-GB')}` : ''}.</p><div class="actions"><button class="secondary" id="manage-sub">Manage or cancel subscription ↗</button></div>` : billingEnabled() ? `<div class="actions"><button class="secondary" data-upgrade>See plans ↗</button></div>` : ''}
-<label class="field inline">Plan (developer preview${billingEnabled() ? ', ignored once subscribed' : ' — not enforced until accounts exist'})<select id="plan"><option value="" ${state.plan == null ? 'selected' : ''}>Server default (${PLANS[plan()].label})</option>${Object.entries(PLANS).map(([k, p]) => `<option value="${k}" ${state.plan === k ? 'selected' : ''}>${p.label} · ${p.price}</option>`).join('')}</select></label>
+<p class="hint">Your plan and subscription live under <button class="text-button" id="open-billing">Plan &amp; billing</button>.</p>
+${session.billing?.subscribed ? '' : `<details class="developer"><summary>Developer</summary><label class="field inline">Plan preview (${billingEnabled() ? 'client-side only; the server still enforces what you have paid for' : 'not enforced until billing is on'})<select id="plan"><option value="" ${state.plan == null ? 'selected' : ''}>Server default (${PLANS[session.ai?.defaultPlan || 'free'].label})</option>${Object.entries(PLANS).map(([k, p]) => `<option value="${k}" ${state.plan === k ? 'selected' : ''}>${p.label} · ${p.price}</option>`).join('')}</select></label></details>`}
 <div class="actions"><button class="secondary" id="export-workspace">Export workspace</button><button class="secondary" id="clear-workspace">Clear all workspace data</button></div>`);
   $('#remember').onchange = (e) => { state.remember = e.target.checked; if (!state.remember) forget(); save(); toast(state.remember ? 'Device saving enabled.' : 'Device saving disabled.'); };
   $('#consent') && ($('#consent').onchange = (e) => { state.aiConsent = e.target.checked; save(); });
-  $('#plan').onchange = (e) => { state.plan = e.target.value || null; save(); render(); toast(`${PLANS[plan()].label} plan (preview).`); };
-  $$('[data-upgrade]', $('#dialog')).forEach((b) => (b.onclick = showPlans));
-  $('#manage-sub')?.addEventListener('click', async (e) => { const button = e.currentTarget; button.disabled = true; try { const { url } = await portal(); stash(); location.href = url; } catch (error) { toast(error.message); button.disabled = false; } });
+  $('#plan') && ($('#plan').onchange = (e) => { state.plan = e.target.value || null; save(); render(); renderStatus(); toast(`${PLANS[plan()].label} plan (preview).`); });
+  $('#open-billing').onclick = () => { closeModal(); showBilling(); };
   $('#export-workspace').onclick = () => download('roledone-workspace.json', JSON.stringify(state, null, 2), 'application/json');
   $('#clear-workspace').onclick = async () => {
     closeModal();
