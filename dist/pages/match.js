@@ -53,7 +53,7 @@ ${rows.map(requirementRow).join('')}
 function scoreCard(s, mode) {
   const words = { strong: 'Strong match on paper.', good: 'Good foundation, a few things to show.', developing: 'Relevant, but the CV is leaving evidence out.', early: 'The CV does not yet show this role.' };
   return `<section class="panel score-card">
- <div class="score-ring ${s.band}"><strong>${s.score}</strong><span>EVIDENCE<br>SCORE</span></div>
+ <div class="score-ring-wrap"><div class="score-ring ${s.band}" style="--target:${s.score}"></div><div class="score-label"><strong>${s.score}</strong><span>EVIDENCE<br>SCORE</span></div></div>
  <div class="score-copy">
   <div class="eyebrow">${mode}</div>
   <h2>${words[s.band]}</h2>

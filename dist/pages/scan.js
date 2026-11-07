@@ -34,7 +34,7 @@ function report(scan) {
   const tile = (key, label, value, note) => { const [g, cls] = grade(value); return `<button class="tile ${cls}" data-tile="${key}" aria-expanded="${session.tile === key}"><span class="tile-label">${label}</span><strong>${value}</strong><span class="bar"><i style="width:${value}%"></i></span><span class="grade">${g}</span><small>${note}</small></button>`; };
   return `
 <section class="panel scan-hero">
- <div class="score-ring big ${scan.band}"><strong>${scan.score}</strong><span>/ 100</span></div>
+ <div class="score-ring-wrap big"><div class="score-ring big ${scan.band}" style="--target:${scan.score}"></div><div class="score-label"><strong>${scan.score}</strong><span>/ 100</span></div></div>
  <div class="scan-copy">
   <div class="eyebrow">YOUR CV SCORE · <span class="band-chip ${scan.band}">${bandLabel}</span></div>
   <h2>${s?.headline ? esc(s.headline) : bandCopy}</h2>
