@@ -21,6 +21,10 @@ export function render() {
  <div class="metric"><div class="metric-top"><span>Answers practised</span><span>◌</span></div><strong>${two(practised)}</strong><small>Your interview preparation</small></div>
  <div class="metric"><div class="metric-top"><span>Applications tracked</span><span>↗</span></div><strong>${two(state.applications.length)}</strong><small>Your next opportunities</small></div>
 </section>
+<section class="watch" id="watch">
+ <div class="watch-copy"><div class="eyebrow">SEE IT IN 20 SECONDS</div><h2>Paste the advert. See what your CV proves.</h2><p>One role, start to finish: the requirements with quoted evidence, a gap turned into a bullet from your own experience, and the interview question hiding in the advert.</p><button class="primary lime" id="demo-2">Try the sample journey ↗</button></div>
+ <figure class="watch-video"><video id="launch-video" playsinline preload="metadata" poster="/media/roledone-in-20-seconds.jpg" controls><source src="/media/roledone-in-20-seconds.mp4" type="video/mp4"></video><button class="play-overlay" id="play-launch" aria-label="Play the 20-second video"><span>▶</span></button></figure>
+</section>
 <section class="featured" id="featured"><div class="section-heading"><h2>Featured roles</h2><span><button class="text-button" data-page="jobs">Search all roles ↗</button></span></div><div class="carousel-wrap"><button class="carousel-nav prev" id="car-prev" aria-label="Previous roles">‹</button><div class="carousel" id="carousel">${featured ? featured.map((j) => jobCard(j, { compact: true })).join('') : '<div class="job-card compact skeleton"></div><div class="job-card compact skeleton"></div><div class="job-card compact skeleton"></div><div class="job-card compact skeleton"></div>'}</div><button class="carousel-nav next" id="car-next" aria-label="Next roles">›</button></div></section>
 <div class="lower-grid">
  <section><div class="section-heading"><h2>A clearer path forward</h2><span>YOUR NEXT STEPS</span></div><div class="panel">
@@ -36,6 +40,14 @@ export function render() {
 
 export function bind({ loadSample, navigate, rebind }) {
   document.getElementById('demo')?.addEventListener('click', loadSample);
+  document.getElementById('demo-2')?.addEventListener('click', loadSample);
+  const v = $('#launch-video'), play = $('#play-launch');
+  if (v && play) {
+    play.onclick = () => { v.play(); };
+    v.addEventListener('play', () => play.classList.add('hidden'));
+    v.addEventListener('pause', () => { if (!v.ended) play.classList.remove('hidden'); });
+    v.addEventListener('ended', () => { play.classList.remove('hidden'); });
+  }
   const paint = () => {
     const c = $('#carousel'); if (!c) return;
     c.innerHTML = featured.length ? featured.map((j) => jobCard(j, { compact: true })).join('') : '<p class="hint">No roles to show right now. <button class="text-button" data-page="jobs">Search roles</button></p>';

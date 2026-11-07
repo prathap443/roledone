@@ -9,7 +9,7 @@ import { METERED } from './meter.mjs';
 import { usageContext } from './usage.mjs';
 
 const MAX_BODY = 256 * 1024;
-const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.wasm': 'application/wasm', '.svg': 'image/svg+xml', '.json': 'application/json', '.bcmap': 'application/octet-stream', '.pfb': 'application/octet-stream', '.ttf': 'font/ttf' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.wasm': 'application/wasm', '.svg': 'image/svg+xml', '.json': 'application/json', '.bcmap': 'application/octet-stream', '.pfb': 'application/octet-stream', '.ttf': 'font/ttf', '.mp4': 'video/mp4', '.jpg': 'image/jpeg', '.png': 'image/png', '.webm': 'video/webm' };
 const csp = ({ connect = [] } = {}) => [
   "default-src 'self'",
   "script-src 'self' 'wasm-unsafe-eval'",
@@ -17,6 +17,7 @@ const csp = ({ connect = [] } = {}) => [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   'font-src https://fonts.gstatic.com',
   "img-src 'self' data:",
+  "media-src 'self'",
   `connect-src 'self'${connect.map((o) => ' ' + o).join('')}`, // the browser talks to Supabase Auth directly
   "frame-ancestors 'none'",
   "base-uri 'self'",
@@ -301,7 +302,17 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
       if (type.startsWith('text/html')) headers['Content-Security-Policy'] = CSP;
       // App modules must revalidate on every load so a deploy never leaves a browser running stale JS
       // against new HTML; only the pinned vendor parsers are safe to cache.
-      headers['Cache-Control'] = file.includes(`${sep}vendor${sep}`) ? 'public, max-age=86400' : 'no-cache';
+      const immutable = file.includes(`${sep}vendor${sep}`) || file.includes(`${sep}media${sep}`);
+      headers['Cache-Control'] = immutable ? 'public, max-age=86400' : 'no-cache';
+      // Range requests: Safari will not play <video> without them.
+      const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+      if (range && type.startsWith('video/')) {
+        const start = range[1] ? Number(range[1]) : 0, end = range[2] ? Math.min(Number(range[2]), data.length - 1) : data.length - 1;
+        if (start > end || start >= data.length) { res.writeHead(416, { 'Content-Range': `bytes */${data.length}` }).end(); return; }
+        res.writeHead(206, { ...headers, 'Content-Range': `bytes ${start}-${end}/${data.length}`, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1 }).end(data.subarray(start, end + 1));
+        return;
+      }
+      if (type.startsWith('video/')) headers['Accept-Ranges'] = 'bytes';
       res.writeHead(200, headers).end(data);
     } catch { res.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found'); }
   }
