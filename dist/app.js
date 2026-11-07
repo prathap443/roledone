@@ -167,6 +167,8 @@ async function handleCheckoutReturn() {
   }
 }
 
+$('#footer-copy').textContent = `© ${new Date().getFullYear()} Roledone. All rights reserved.`;
+
 function render() {
   $('#breadcrumb').innerHTML = `Workspace <b>/ ${names[session.page]}</b>`;
   $$('nav button').forEach((b) => {
@@ -256,9 +258,12 @@ document.addEventListener('roledone:upgrade', async (e) => {
 
 window.addEventListener('hashchange', () => {
   const next = location.hash.slice(1);
+  if (next === 'plans') { history.replaceState(null, '', location.pathname + '#' + session.page); showPlans(); return; }
   if (next !== session.page) { session.page = names[next] ? next : 'overview'; render(); }
 });
 
+const openPlansFromHash = location.hash === '#plans'; // footer "Pricing" links from the blog and legal pages
+if (openPlansFromHash) history.replaceState(null, '', location.pathname + '#overview');
 session.page = names[location.hash.slice(1)] ? location.hash.slice(1) : 'overview';
 render();
 loadStatus().then(async (status) => {
@@ -268,5 +273,6 @@ loadStatus().then(async (status) => {
   await loadBilling(); renderStatus(); if (status.ai || session.billing?.subscribed || signedInNow) render();
   if (signedInNow) await afterSignIn();
   await handleCheckoutReturn();
+  if (openPlansFromHash) showPlans();
 });
 loadSourceDoc().then(() => { if (session.sourceDoc && session.page === 'editor') render(); });

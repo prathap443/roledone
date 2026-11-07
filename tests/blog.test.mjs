@@ -30,3 +30,14 @@ test('posts load, sort newest first, and render pages', async () => {
   assert.equal(blog.post('nope'), null);
   assert.match(blog.sitemap(), /<loc>https:\/\/t.example\/blog\/how-ai-agents-work<\/loc>/);
 });
+
+test('legal pages render with placeholders filled and appear in the sitemap', async () => {
+  const { loadLegal } = await import('../server/blog.mjs');
+  const legal = await loadLegal(new URL('../content/legal', import.meta.url).pathname);
+  assert.ok(legal.privacy && legal.terms && legal.faq);
+  for (const p of Object.values(legal)) assert.doesNotMatch(p.html, /\{\{/, p.slug);
+  const blog = createBlog({ posts: [], legal, siteUrl: 'https://t.example' });
+  assert.match(blog.legalPage('privacy'), /<h1>Privacy Policy<\/h1>/); assert.equal(blog.legalPage('nope'), null);
+  assert.match(blog.sitemap(), /<loc>https:\/\/t.example\/terms<\/loc>/);
+  assert.match(blog.index(), /href="\/privacy"/); // shared footer
+});

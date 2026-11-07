@@ -5,7 +5,7 @@ import { providerFromEnv } from './server/providers/index.mjs';
 import { createUsage } from './server/usage.mjs';
 import { jobsFromEnv } from './server/jobs.mjs';
 import { createMeter, memoryStore, supabaseStore, limitsFromEnv } from './server/meter.mjs';
-import { loadPosts, createBlog } from './server/blog.mjs';
+import { loadPosts, loadLegal, createBlog } from './server/blog.mjs';
 import { billingFromEnv, authFromEnv } from './server/billing.mjs';
 
 // Load .env for local development only; Replit and production use real environment variables.
@@ -21,7 +21,7 @@ console.log(`Metering: ${auth ? 'Supabase' : 'memory'} · free ${meter.limits.fr
 const port = Number(process.env.PORT || 3000);
 
 const jobs = jobsFromEnv(process.env);
-const blog = createBlog({ posts: await loadPosts(new URL('./content/blog', import.meta.url).pathname), siteUrl: process.env.APP_URL || 'https://roledone.com' });
+const blog = createBlog({ posts: await loadPosts(new URL('./content/blog', import.meta.url).pathname), legal: await loadLegal(new URL('./content/legal', import.meta.url).pathname), siteUrl: process.env.APP_URL || 'https://roledone.com' });
 console.log(`Jobs: ${jobs.source} · Blog: ${blog.posts.length} posts`);
 http.createServer(createHandler({ ai, usage, billing, auth, jobs, blog, meter })).listen(port, '0.0.0.0', () => {
   const status = ai.status();

@@ -140,9 +140,32 @@ article th{font-weight:600;background:#f3f6ec}
 .next h2{font-family:'Manrope',sans-serif;margin:0 0 8px;letter-spacing:-.6px}
 .next p{color:#c9d6c5;margin:0 0 18px;max-width:56ch}
 .next a{display:inline-block;background:var(--lime);color:var(--ink);font-weight:700;text-decoration:none;padding:12px 18px;border-radius:12px}
-footer{color:var(--muted);font-size:13px;padding:0 0 40px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+footer.site{border-top:1px solid var(--line);margin-top:20px;padding:34px 0 40px;display:grid;grid-template-columns:1.4fr repeat(4,1fr);gap:24px;font-size:13.5px}
+footer.site h4{margin:0 0 10px;font-size:11px;letter-spacing:1.4px;color:var(--muted);font-weight:700}
+footer.site a{display:block;color:var(--ink);text-decoration:none;margin:0 0 8px}footer.site a:hover{color:var(--green)}
+footer.site .about{color:var(--muted)}footer.site .about p{margin:8px 0 0;max-width:36ch}
+footer.site .legalline{grid-column:1/-1;border-top:1px solid var(--line);padding-top:16px;color:var(--muted);font-size:12.5px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+@media(max-width:720px){footer.site{grid-template-columns:1fr 1fr}footer.site .about{grid-column:1/-1}}
 @media(max-width:540px){header.site nav a{margin-left:12px}article{padding:26px 18px}article p,article li{font-size:16px}}
 `;
+
+export const LEGAL = {
+  name: process.env.ROLEDONE_LEGAL_NAME || 'Roledone',
+  address: process.env.ROLEDONE_LEGAL_ADDRESS || '',
+  email: process.env.ROLEDONE_SUPPORT_EMAIL || 'support@roledone.com',
+};
+
+/** Site-wide footer, shared by the blog and legal pages (the app has its own copy in index.html). */
+export function siteFooter() {
+  return `<footer class="site">
+ <div class="about"><a class="brand" href="/"><span>↗</span>roledone</a><p>Match your CV to the role, fix the gaps with your own experience, walk in prepared. Built in the UK for tech professionals.</p><p>${esc(LEGAL.name)}${LEGAL.address ? `<br>${esc(LEGAL.address)}` : ''}</p></div>
+ <div><h4>PRODUCT</h4><a href="/#scan">CV scan</a><a href="/#match">Role match</a><a href="/#editor">CV studio &amp; templates</a><a href="/#interview">Interview room</a><a href="/#jobs">Jobs</a></div>
+ <div><h4>COMPANY</h4><a href="/#plans">Pricing</a><a href="/faq">FAQs</a><a href="mailto:${esc(LEGAL.email)}">Contact</a></div>
+ <div><h4>LEARN</h4><a href="/blog">All guides</a><a href="/blog/what-is-mcp">What is MCP?</a><a href="/blog/how-ai-agents-work">How agents work</a><a href="/blog/first-ai-engineering-role">Your first AI role</a></div>
+ <div><h4>LEGAL</h4><a href="/privacy">Privacy policy</a><a href="/terms">Terms of service</a><a href="/privacy#cookies-and-browser-storage">Cookies</a></div>
+ <div class="legalline"><span>© ${new Date().getFullYear()} ${esc(LEGAL.name)}. All rights reserved.</span><span>Job adverts and company names belong to their owners; listing them implies no affiliation.</span></div>
+</footer>`;
+}
 
 function layout({ title, description, body, canonical, jsonLd = null }) {
   return `<!doctype html><html lang="en-GB"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#192c26">
@@ -152,13 +175,26 @@ ${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(
 <style>${CSS}</style></head><body><div class="wrap">
 <header class="site"><a class="brand" href="/"><span>↗</span>roledone</a><nav><a href="/blog">Learn</a><a href="/#scan">Scan my CV</a><a class="cta" href="/#match">Open the app</a></nav></header>
 ${body}
-<footer><span>Roledone — an evidence-first career studio for tech professionals.</span><span><a href="/blog">Learn</a> · <a href="/">App</a></span></footer>
+${siteFooter()}
 </div></body></html>`;
 }
 
 const fmtDate = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-export function createBlog({ posts, siteUrl = 'https://roledone.com' }) {
+/** Legal/static pages from content/legal/*.md with {{LEGAL_NAME}} style placeholders. */
+export async function loadLegal(dir) {
+  const out = {};
+  for (const f of (await readdir(dir).catch(() => [])).filter((x) => x.endsWith('.md'))) {
+    const raw = await readFile(resolve(dir, f), 'utf8');
+    const filled = raw.replace(/\{\{LEGAL_NAME\}\}/g, LEGAL.name).replace(/\{\{SUPPORT_EMAIL\}\}/g, LEGAL.email).replace(/\{\{LEGAL_ADDRESS\}\}/g, LEGAL.address ? `Our address is ${LEGAL.address}. ` : '');
+    const { meta, body } = parseFrontmatter(filled);
+    if (!meta.title) throw new Error(`content/legal/${f}: frontmatter needs title`);
+    out[basename(f, '.md')] = { slug: basename(f, '.md'), title: meta.title, description: meta.description || '', date: meta.date || '', html: renderMarkdown(body) };
+  }
+  return out;
+}
+
+export function createBlog({ posts, legal = {}, siteUrl = 'https://roledone.com' }) {
   const bySlug = new Map(posts.map((p) => [p.slug, p]));
   return {
     posts,
@@ -176,8 +212,16 @@ export function createBlog({ posts, siteUrl = 'https://roledone.com' }) {
       const jsonLd = { '@context': 'https://schema.org', '@type': 'BlogPosting', headline: p.title, description: p.description, datePublished: p.date, author: { '@type': 'Organization', name: 'Roledone' }, mainEntityOfPage: `${siteUrl}/blog/${p.slug}` };
       return layout({ title: `${p.title} | Roledone Learn`, description: p.description, body, canonical: `${siteUrl}/blog/${p.slug}`, jsonLd });
     },
+    /** /privacy, /terms, /faq … */
+    legalPage(slug) {
+      const p = legal[slug];
+      if (!p) return null;
+      const body = `<article><h1>${esc(p.title)}</h1>${p.description ? `<p class="lede">${esc(p.description)}</p>` : ''}${p.html}</article>`;
+      return layout({ title: `${p.title} | Roledone`, description: p.description, body, canonical: `${siteUrl}/${p.slug}` });
+    },
+    legalSlugs: Object.keys(legal),
     sitemap() {
-      const urls = [`${siteUrl}/`, `${siteUrl}/blog`, ...posts.map((p) => `${siteUrl}/blog/${p.slug}`)];
+      const urls = [`${siteUrl}/`, `${siteUrl}/blog`, ...posts.map((p) => `${siteUrl}/blog/${p.slug}`), ...Object.keys(legal).map((s) => `${siteUrl}/${s}`)];
       return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `  <url><loc>${esc(u)}</loc></url>`).join('\n')}\n</urlset>\n`;
     },
     robots() { return `User-agent: *\nAllow: /\nSitemap: ${siteUrl}/sitemap.xml\n`; },

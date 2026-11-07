@@ -312,6 +312,8 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
     if (pathname === '/sitemap.xml') return res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }).end(blog.sitemap());
     if (pathname === '/robots.txt') return res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }).end(blog.robots());
     if (pathname === '/blog' || pathname === '/blog/') return html(200, blog.index());
+    const legalSlug = pathname.slice(1).replace(/\/$/, '');
+    if (blog.legalSlugs?.includes(legalSlug)) return html(200, blog.legalPage(legalSlug));
     const slug = pathname.slice('/blog/'.length).replace(/\/$/, '');
     const body = /^[a-z0-9-]+$/.test(slug) ? blog.post(slug) : null;
     return body ? html(200, body) : html(404, blog.index());
@@ -320,7 +322,7 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
   return async (req, res) => {
     let pathname;
     try { pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); } catch { res.writeHead(400).end(); return; }
-    if (blog && (pathname === '/blog' || pathname === '/blog/' || pathname.startsWith('/blog/') || pathname === '/sitemap.xml' || pathname === '/robots.txt')) return page(req, res, pathname);
+    if (blog && (pathname === '/blog' || pathname === '/blog/' || pathname.startsWith('/blog/') || pathname === '/sitemap.xml' || pathname === '/robots.txt' || blog.legalSlugs?.includes(pathname.slice(1).replace(/\/$/, '')))) return page(req, res, pathname);
     if (!pathname.startsWith('/api/')) return staticFile(req, res, pathname);
     try {
       await api(req, res, pathname);
