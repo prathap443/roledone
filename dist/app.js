@@ -4,7 +4,8 @@
 import { sampleCV, sampleJD } from './core.js';
 import { state, session, load, save, reset, forget, setSources, setStorageErrorHandler, loadSourceDoc, stash } from './state.js';
 import { $, $$, esc, toast, modal, closeModal, confirm, download } from './ui.js';
-import { loadStatus, loadBilling, aiAvailable, providerLabel, billingEnabled, startCheckout, confirmCheckout, portal, setToken } from './api.js';
+import { loadStatus, loadBilling, aiAvailable, providerLabel, billingEnabled, authEnabled, startCheckout, confirmCheckout, portal, setToken, getToken, attachDeviceSubscription } from './api.js';
+import { sendMagicLink, signInWithGoogle, captureSessionFromUrl, signOut, currentUser } from './auth.js';
 import { PLANS, COMPARISON, plan } from './plans.js';
 import * as overview from './pages/overview.js';
 import * as scan from './pages/scan.js';
@@ -52,14 +53,54 @@ function showPlans() {
 <table class="plan-table"><thead><tr><th></th>${Object.entries(PLANS).map(([k, p]) => `<th class="${k === current ? 'current' : ''}">${p.label}<small>${p.price}</small></th>`).join('')}</tr></thead>
 <tbody>${COMPARISON.map(([f, ...cols]) => `<tr><td>${f}</td>${cols.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}
 <tr class="cta-row"><td></td>${Object.keys(PLANS).map((k) => `<td>${cta(k)}</td>`).join('')}</tr></tbody></table>
-${live ? `<label class="field">Email for your receipt<input type="email" id="checkout-email" placeholder="you@example.com" autocomplete="email"></label>
-<p class="hint">Secure checkout by Stripe. Cancel any time from workspace settings. Your subscription is remembered on this device${subscribed ? '' : '; sign-in across devices is coming'}.</p>` : `<p class="hint">Payments are not live yet. You are on the <strong>${PLANS[current].label}</strong> plan${current === 'free' ? '' : ' (developer preview)'}.</p>`}`);
+${live ? `${authEnabled() ? (currentUser() ? `<p class="hint">Receipts go to <strong>${esc(currentUser().email)}</strong>.</p>` : '<p class="hint">You will be asked to sign in before checkout so your plan works on every device.</p>') : '<label class="field">Email for your receipt<input type="email" id="checkout-email" placeholder="you@example.com" autocomplete="email"></label>'}
+<p class="hint">Secure checkout by Stripe. Cancel any time from Plan &amp; billing.${authEnabled() ? '' : ' Your subscription is remembered on this device.'}</p>` : `<p class="hint">Payments are not live yet. You are on the <strong>${PLANS[current].label}</strong> plan${current === 'free' ? '' : ' (developer preview)'}.</p>`}`);
   $$('[data-checkout]').forEach((b) => (b.onclick = async () => {
+    if (authEnabled() && !currentUser()) { showSignIn({ reason: 'Sign in first so your subscription is attached to your account and works on every device.', after: 'checkout' }); return; }
     const email = $('#checkout-email')?.value.trim();
     b.disabled = true; b.textContent = 'Opening checkout…';
     try { const { url } = await startCheckout(b.dataset.checkout, email); stash(); location.href = url; }
     catch (error) { toast(error.message); b.disabled = false; b.textContent = `Choose ${PLANS[b.dataset.checkout].label}`; }
   }));
+}
+
+/** Sign in: magic link or Google. `after` runs once signed in (e.g. continue to checkout). */
+function showSignIn({ reason = '', after = null } = {}) {
+  modal(`<div class="eyebrow">SIGN IN</div><h2>No password. Just your email.</h2>
+<p>${esc(reason || 'Sign in to keep your subscription on every device and pick up where you left off.')}</p>
+<form id="magic-form"><label class="field">Email<input type="email" id="magic-email" placeholder="you@example.com" autocomplete="email" required></label>
+<div class="actions"><button class="primary" type="submit">Email me a sign-in link</button><button class="secondary" type="button" id="google-signin"><span class="g">G</span> Continue with Google</button></div></form>
+<p class="hint">We only use your email to sign you in and send receipts. No newsletters.</p>`);
+  sessionStorage.setItem('roledone-after-signin', after || '');
+  $('#magic-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const email = $('#magic-email').value.trim(), button = e.submitter;
+    button.disabled = true; button.textContent = 'Sending…';
+    try {
+      stash();
+      await sendMagicLink(email);
+      $('#dialog-content').innerHTML = `<div class="eyebrow">CHECK YOUR EMAIL</div><h2>Link sent to ${esc(email)}.</h2><p>Open it on this device to finish signing in. It works once and expires in an hour. Nothing in your inbox? Check spam, or wait a minute and try again.</p><div class="actions"><button class="secondary" id="signin-done">Close</button></div>`;
+      $('#signin-done').onclick = closeModal;
+    } catch (error) { toast(error.message); button.disabled = false; button.textContent = 'Email me a sign-in link'; }
+  };
+  $('#google-signin').onclick = () => { try { stash(); signInWithGoogle(); } catch (error) { toast(error.message); } };
+}
+$('#signin').onclick = () => (currentUser() ? showAccount() : showSignIn());
+
+function showAccount() {
+  const u = currentUser();
+  modal(`<div class="eyebrow">ACCOUNT</div><h2>${esc(u?.email || 'Signed in')}</h2><p>Your subscription and, soon, your saved CVs follow this account on any device.</p>
+<div class="actions"><button class="secondary" data-billing>Plan &amp; billing</button><button class="text-button" id="signout">Sign out</button></div>`);
+  $('[data-billing]', $('#dialog')).onclick = showBilling;
+  $('#signout').onclick = async () => { await signOut(); await loadBilling(); closeModal(); renderStatus(); render(); toast('Signed out.'); };
+}
+
+/** After sign-in: attach any subscription bought on this device before accounts existed, then continue. */
+async function afterSignIn() {
+  if (getToken()) { try { const r = await attachDeviceSubscription(); if (r.attached) { setToken(''); toast(`Your ${PLANS[r.plan]?.label || 'paid'} subscription is now on your account.`); } } catch { /* nothing to attach or already attached */ } }
+  await loadBilling(); renderStatus(); render();
+  const next = sessionStorage.getItem('roledone-after-signin'); sessionStorage.removeItem('roledone-after-signin');
+  if (next === 'checkout') showPlans(); else toast(`Signed in as ${currentUser()?.email || 'you'}.`);
 }
 
 /** Plan & billing: the one place a customer looks for their subscription. */
@@ -73,11 +114,12 @@ function showBilling() {
   modal(`<div class="eyebrow">PLAN &amp; BILLING</div>
 <h2>${b.subscribed ? `${esc(PLANS[b.plan]?.label || 'Paid')} plan` : `${esc(PLANS[current].label)} plan`}</h2>
 <p>${esc(statusLine)}</p>
-${b.subscribed ? `<p class="hint">Your subscription is tied to this browser. Clearing site data or switching device loses access until sign-in arrives; keep your Stripe receipt.</p>
+${b.subscribed ? `${b.source === 'device' ? (authEnabled() ? `<p class="hint">This subscription is tied to this browser. <button class="text-button" id="attach-now">Sign in to attach it to your account</button> so it works everywhere.</p>` : '<p class="hint">Your subscription is tied to this browser. Clearing site data or switching device loses access; keep your Stripe receipt.</p>') : `<p class="hint">On your account${currentUser()?.email ? ` (${esc(currentUser().email)})` : ''} — works on any device you sign in to.</p>`}
 <div class="actions"><button class="primary" id="manage-sub">Manage, change card or cancel ↗</button><button class="secondary" data-upgrade>Compare plans</button></div>`
   : `<div class="actions"><button class="primary lime" data-upgrade>See plans and upgrade ↗</button></div>`}
 ${!b.subscribed && current !== 'free' ? `<p class="hint">You currently have ${esc(PLANS[current].label)} access through a server default${state.plan ? ' / developer preview' : ''}.</p>` : ''}`);
   $$('[data-upgrade]', $('#dialog')).forEach((x) => (x.onclick = showPlans));
+  $('#attach-now')?.addEventListener('click', () => (currentUser() ? afterSignIn() : showSignIn({ reason: 'Sign in to attach the subscription on this device to your account.' })));
   $('#manage-sub')?.addEventListener('click', async (e) => { const button = e.currentTarget; button.disabled = true; try { const { url } = await portal(); stash(); location.href = url; } catch (error) { toast(error.message); button.disabled = false; } });
 }
 $('#plan-chip').onclick = showBilling;
@@ -91,10 +133,10 @@ async function handleCheckoutReturn() {
   url.searchParams.delete('session_id'); history.replaceState(null, '', url.pathname + url.hash);
   try {
     const res = await confirmCheckout(sessionId);
-    setToken(res.token);
+    if (res.token) setToken(res.token);
     await loadBilling();
     render(); renderStatus();
-    modal(`<div class="eyebrow">WELCOME TO ${esc(PLANS[res.plan].label.toUpperCase())}</div><h2>You’re set.</h2><p>Everything is unlocked on this device${res.email ? `; Stripe has emailed a receipt to ${esc(res.email)}` : ''}. Manage or cancel any time from workspace settings.</p><div class="actions"><button class="primary" id="welcome-ok">Start with a role match</button></div>`);
+    modal(`<div class="eyebrow">WELCOME TO ${esc(PLANS[res.plan].label.toUpperCase())}</div><h2>You’re set.</h2><p>${res.attached ? 'Everything is unlocked on your account, on any device you sign in to' : 'Everything is unlocked on this device'}${res.email ? `; Stripe has emailed a receipt to ${esc(res.email)}` : ''}. Manage or cancel any time from Plan &amp; billing.</p><div class="actions"><button class="primary" id="welcome-ok">Start with a role match</button></div>`);
     $('#welcome-ok').onclick = () => { closeModal(); navigate('match'); };
   } catch (error) {
     toast(`Payment received but activation failed: ${error.message}. Reload this page; if it persists, contact support with your receipt.`);
@@ -121,6 +163,10 @@ function renderStatus() {
   const b = session.billing || {};
   const current = plan();
   $('.profile small').textContent = b.subscribed ? `${PLANS[b.plan]?.label || 'Paid'} plan · manage` : `${PLANS[current].label} plan${billingEnabled() && current === 'free' ? ' · see plans' : ''}`;
+  const si = $('#signin');
+  si.hidden = !authEnabled();
+  si.textContent = currentUser() ? (currentUser().email || 'Account') : 'Sign in';
+  si.classList.toggle('signed', Boolean(currentUser()));
   const chip = $('#plan-chip');
   chip.textContent = b.subscribed ? `${PLANS[b.plan]?.label || 'Paid'}${b.status === 'past_due' ? ' · payment failed' : b.renews ? ` · renews ${new Date(b.renews).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}` : `${PLANS[current].label}${billingEnabled() && current === 'free' ? ' · See plans' : ''}`;
   chip.classList.toggle('paid', Boolean(b.subscribed));
@@ -176,5 +222,12 @@ window.addEventListener('hashchange', () => {
 
 session.page = names[location.hash.slice(1)] ? location.hash.slice(1) : 'overview';
 render();
-loadStatus().then(async (status) => { await loadBilling(); renderStatus(); if (status.ai || session.billing?.subscribed) render(); await handleCheckoutReturn(); });
+loadStatus().then(async (status) => {
+  let signedInNow = false;
+  try { signedInNow = await captureSessionFromUrl(); } catch (error) { toast(error.message); }
+  if (signedInNow) { session.page = 'overview'; load(); }
+  await loadBilling(); renderStatus(); if (status.ai || session.billing?.subscribed || signedInNow) render();
+  if (signedInNow) await afterSignIn();
+  await handleCheckoutReturn();
+});
 loadSourceDoc().then(() => { if (session.sourceDoc && session.page === 'editor') render(); });

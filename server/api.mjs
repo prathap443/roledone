@@ -4,17 +4,18 @@
 import { readFile } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
 import { LIMITS, isLogistics } from './validate.mjs';
+import { planFromRow } from './supabase.mjs';
 
 const MAX_BODY = 256 * 1024;
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.wasm': 'application/wasm', '.svg': 'image/svg+xml', '.json': 'application/json', '.bcmap': 'application/octet-stream', '.pfb': 'application/octet-stream', '.ttf': 'font/ttf' };
-const CSP = [
+const csp = ({ connect = [] } = {}) => [
   "default-src 'self'",
   "script-src 'self' 'wasm-unsafe-eval'",
   "worker-src 'self' blob:",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   'font-src https://fonts.gstatic.com',
   "img-src 'self' data:",
-  "connect-src 'self'",
+  `connect-src 'self'${connect.map((o) => ' ' + o).join('')}`, // the browser talks to Supabase Auth directly
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -71,55 +72,107 @@ const RANK_FALLBACK = { free: 0, pro: 1, premium: 2 };
 /** Minimum plan per AI endpoint. Scan summary stays free: it is the conversion hook. */
 const REQUIRED_PLAN = { '/api/suggestions': 'pro', '/api/gap-questions': 'pro', '/api/gap-bullet': 'pro', '/api/questions': 'pro', '/api/feedback': 'pro', '/api/structure': 'pro' };
 
-export function createHandler({ ai, root = resolve('dist'), rateLimit = createRateLimiter(), log = console, usage = null, billing = null } = {}) {
+export function createHandler({ ai, root = resolve('dist'), rateLimit = createRateLimiter(), log = console, usage = null, billing = null, auth = null } = {}) {
+  const CSP = csp({ connect: auth ? [new URL(auth.publicConfig.url).origin] : [] });
   const send = (res, status, body, headers = {}) => {
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers });
     res.end(JSON.stringify(body));
   };
 
-  // Effective plan for a request: the server default, or the entitlement token if it grants more.
+  const RANK = { free: 0, pro: 1, premium: 2 };
+  const bearer = (req) => (req.headers.authorization || '').replace(/^Bearer\s+/i, '') || null;
+  /** Signed-in user for the request, or null. */
+  const userFor = async (req) => (auth ? auth.userFromToken(bearer(req)) : null);
+
+  // Effective plan: the best of (server default, account subscription, device entitlement token).
   async function planFor(req) {
     const base = ai.status().defaultPlan || 'free';
-    if (!billing) return { plan: base };
-    const { plan, claims, status, periodEnd } = await billing.entitlements.planFor(req.headers['x-roledone-token']);
-    return billing.entitlements.allows(plan, base) ? { plan, claims, status, periodEnd } : { plan: base, claims, status, periodEnd };
+    const out = { plan: base, source: 'default', user: null, claims: null, status: null, periodEnd: null };
+    const consider = (plan, extra) => { if ((RANK[plan] ?? 0) > (RANK[out.plan] ?? 0)) Object.assign(out, { plan }, extra); };
+    if (auth) {
+      const user = await userFor(req);
+      if (user) {
+        out.user = user;
+        const row = await auth.subscriptionForUser(user.id).catch(() => null);
+        if (row) { out.subscription = row; consider(planFromRow(row), { source: 'account', status: row.status, periodEnd: row.period_end ? new Date(row.period_end).getTime() : null }); }
+      }
+    }
+    if (billing && req.headers['x-roledone-token']) {
+      const e = await billing.entitlements.planFor(req.headers['x-roledone-token']);
+      out.claims = e.claims;
+      if (e.claims) consider(e.plan, { source: 'device', status: e.status, periodEnd: e.periodEnd });
+    }
+    return out;
   }
 
   async function api(req, res, pathname) {
-    if (pathname === '/api/status' && req.method === 'GET') return send(res, 200, { ...ai.status(), billing: Boolean(billing), plans: billing ? Object.keys(billing.stripe.prices) : [] });
+    if (pathname === '/api/status' && req.method === 'GET') return send(res, 200, { ...ai.status(), billing: Boolean(billing), plans: billing ? Object.keys(billing.stripe.prices) : [], auth: auth ? auth.publicConfig : null });
+    if (pathname === '/api/me' && req.method === 'GET') {
+      const e = await planFor(req);
+      return send(res, 200, { user: e.user, plan: e.plan, source: e.source, status: e.status, renews: e.periodEnd, subscribed: Boolean(e.subscription || e.claims) });
+    }
 
     if (pathname === '/api/stripe/webhook' && req.method === 'POST') {
       if (!billing) throw new HttpError(404, 'Billing is not configured');
       const raw = await readRaw(req);
       const event = billing.stripe.verifyWebhook(raw, req.headers['stripe-signature']);
       const obj = event.data?.object || {};
-      if (event.type === 'checkout.session.completed') { /* entitlement is issued on confirm; nothing to do */ }
-      else if (event.type.startsWith('customer.subscription.')) billing.entitlements.applyEvent(event.type, billing.stripe.subscriptionInfo(obj));
-      else if (event.type === 'invoice.payment_failed' && obj.subscription) { try { billing.entitlements.remember(await billing.stripe.subscription(obj.subscription)); } catch { /* re-checked later */ } }
+      if (event.type === 'checkout.session.completed') {
+        // Belt and braces: if the buyer closes the tab before /confirm runs, the account still gets its row.
+        if (auth && obj.client_reference_id && obj.subscription) {
+          try { const info = await billing.stripe.subscription(typeof obj.subscription === 'string' ? obj.subscription : obj.subscription.id); billing.entitlements.remember(info); await auth.upsertSubscription({ userId: obj.client_reference_id, email: obj.customer_details?.email || null, info }); }
+          catch (e) { log.error(`[billing] could not record checkout for ${obj.client_reference_id}: ${e.message}`); }
+        }
+      }
+      else if (event.type.startsWith('customer.subscription.')) {
+        const info = billing.stripe.subscriptionInfo(obj);
+        billing.entitlements.applyEvent(event.type, info);
+        if (auth) await auth.updateByStripeId(info.subscriptionId, event.type === 'customer.subscription.deleted' ? { ...info, status: 'canceled' } : info).catch((e) => log.error(`[billing] db update failed: ${e.message}`));
+      }
+      else if (event.type === 'invoice.payment_failed' && obj.subscription) { try { const info = await billing.stripe.subscription(obj.subscription); billing.entitlements.remember(info); if (auth) await auth.updateByStripeId(info.subscriptionId, info); } catch { /* re-checked later */ } }
       log.info?.(`[billing] webhook ${event.type}`);
       return send(res, 200, { received: true });
     }
     if (pathname.startsWith('/api/billing/')) {
       if (!billing) throw new HttpError(404, 'Billing is not configured');
-      if (pathname === '/api/billing/status' && req.method === 'GET') { const e = await planFor(req); return send(res, 200, { plan: e.plan, status: e.status || null, renews: e.periodEnd || null, subscribed: Boolean(e.claims) }); }
+      if (pathname === '/api/billing/status' && req.method === 'GET') { const e = await planFor(req); return send(res, 200, { plan: e.plan, status: e.status || null, renews: e.periodEnd || null, subscribed: Boolean(e.subscription || e.claims), source: e.source, user: e.user }); }
       if (req.method !== 'POST') throw new HttpError(405, 'Method not allowed');
       const body = await readJson(req);
       if (pathname === '/api/billing/checkout') {
         const plan = ['pro', 'premium'].includes(body.plan) ? body.plan : 'pro';
-        const email = typeof body.email === 'string' && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(body.email) ? body.email : undefined;
-        return send(res, 200, { url: await billing.stripe.checkoutUrl({ plan, email }) });
+        const user = await userFor(req);
+        if (auth && !user) throw new HttpError(401, 'Sign in first so your subscription is attached to your account.');
+        const email = user?.email || (typeof body.email === 'string' && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(body.email) ? body.email : undefined);
+        return send(res, 200, { url: await billing.stripe.checkoutUrl({ plan, email, clientRef: user?.id }) });
       }
       if (pathname === '/api/billing/confirm') {
         const info = await billing.stripe.confirmCheckout(text(body.session_id, 200, 'session_id'));
         if (!info.plan) throw new HttpError(402, 'Subscription price is not one of ours');
         billing.entitlements.remember(info);
-        log.info?.(`[billing] confirmed ${info.plan} for ${info.customerId}`);
-        return send(res, 200, { token: billing.entitlements.issue(info), plan: info.plan, renews: info.periodEnd, email: info.email });
+        const user = await userFor(req);
+        if (auth && user) await auth.upsertSubscription({ userId: user.id, email: user.email || info.email, info });
+        log.info?.(`[billing] confirmed ${info.plan} for ${info.customerId}${user ? ` (user ${user.id})` : ''}`);
+        return send(res, 200, { token: user ? null : billing.entitlements.issue(info), plan: info.plan, renews: info.periodEnd, email: info.email, attached: Boolean(user) });
       }
       if (pathname === '/api/billing/portal') {
-        const { claims } = await billing.entitlements.planFor(req.headers['x-roledone-token']);
-        if (!claims) throw new HttpError(401, 'No subscription on this device');
-        return send(res, 200, { url: await billing.stripe.portalUrl(claims.cus) });
+        const e = await planFor(req);
+        const customer = e.subscription?.stripe_customer_id || e.claims?.cus;
+        if (!customer) throw new HttpError(401, 'No subscription found for this account or device');
+        return send(res, 200, { url: await billing.stripe.portalUrl(customer) });
+      }
+      if (pathname === '/api/billing/attach') {
+        // A subscription bought before sign-in existed lives in a device token; attach it to the account once.
+        if (!auth) throw new HttpError(404, 'Accounts are not enabled');
+        const user = await userFor(req);
+        if (!user) throw new HttpError(401, 'Sign in first');
+        const existing = await auth.subscriptionForUser(user.id);
+        if (existing) return send(res, 200, { attached: false, reason: 'account already has a subscription' });
+        const e = await billing.entitlements.planFor(req.headers['x-roledone-token']);
+        if (!e.claims || e.plan === 'free') throw new HttpError(400, 'No active subscription on this device');
+        const info = await billing.stripe.subscription(e.claims.sub);
+        await auth.upsertSubscription({ userId: user.id, email: user.email, info });
+        log.info?.(`[billing] attached ${info.subscriptionId} to user ${user.id}`);
+        return send(res, 200, { attached: true, plan: info.plan });
       }
       throw new HttpError(404, 'Unknown endpoint');
     }

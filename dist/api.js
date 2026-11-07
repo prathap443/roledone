@@ -2,6 +2,7 @@
 
 import { state, session, save } from './state.js';
 import { modal, closeModal, $ } from './ui.js';
+import { accessToken, configureAuth } from './auth.js';
 
 const TOKEN_KEY = 'roledone-token';
 export const getToken = () => { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } };
@@ -9,7 +10,8 @@ export const setToken = (t) => { try { t ? localStorage.setItem(TOKEN_KEY, t) : 
 
 async function request(path, body) {
   let res;
-  const headers = { ...(getToken() ? { 'x-roledone-token': getToken() } : {}) };
+  const jwt = await accessToken();
+  const headers = { ...(getToken() ? { 'x-roledone-token': getToken() } : {}), ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}) };
   try {
     res = await fetch(path, body ? { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) } : { headers });
   } catch {
@@ -23,18 +25,26 @@ async function request(path, body) {
 export const billingEnabled = () => Boolean(session.ai?.billing);
 export async function loadBilling() {
   session.billing = { plan: null, subscribed: false };
-  if (!billingEnabled()) return session.billing;
-  try { session.billing = await request('/api/billing/status'); } catch { /* keep defaults */ }
+  session.me = null;
+  if (!billingEnabled() && !authEnabled()) return session.billing;
+  try {
+    const me = await request('/api/me');
+    session.me = me.user;
+    session.billing = { plan: me.plan, status: me.status, renews: me.renews, subscribed: me.subscribed, source: me.source };
+  } catch { /* keep defaults */ }
   return session.billing;
 }
+export const attachDeviceSubscription = () => request('/api/billing/attach', {});
 export const startCheckout = (plan, email) => request('/api/billing/checkout', { plan, email });
 export const confirmCheckout = (session_id) => request('/api/billing/confirm', { session_id });
 export const portal = () => request('/api/billing/portal', {});
 
 export async function loadStatus() {
   try { session.ai = await request('/api/status'); } catch { session.ai = { ai: false, provider: null, model: null }; }
+  configureAuth(session.ai?.auth || null);
   return session.ai;
 }
+export const authEnabled = () => Boolean(session.ai?.auth);
 
 export const aiAvailable = () => Boolean(session.ai?.ai);
 export const providerLabel = () => (session.ai?.provider === 'anthropic' ? 'AI agent' : session.ai?.provider === 'mock' ? 'mock provider' : 'AI');

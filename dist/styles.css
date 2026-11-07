@@ -177,3 +177,8 @@ details.developer{margin-top:18px;border-top:1px solid var(--line);padding-top:1
 details.developer summary{cursor:pointer;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:12px}
 @media(max-width:800px){.plan-chip{margin-left:6px;padding:5px 9px;font-size:10px}}
 @media(max-width:540px){.plan-chip{max-width:120px;overflow:hidden;text-overflow:ellipsis}}
+.signin-button{margin-left:10px;border:1px solid var(--ink);border-radius:20px;padding:6px 12px;font-size:11px;font-weight:600;background:var(--ink);color:#fff;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.signin-button.signed{background:#fff;color:var(--ink)}
+.signin-button[hidden]{display:none}
+#magic-form .actions{margin-top:4px}.g{font-weight:800;margin-right:6px;color:#4285f4}
+@media(max-width:800px){.signin-button{margin-left:6px;padding:5px 9px;font-size:10px;max-width:110px}}

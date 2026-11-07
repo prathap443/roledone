@@ -31,7 +31,7 @@ export const blank = () => ({
 });
 
 export const state = blank();
-export const session = { page: 'overview', question: 0, isSample: false, questionsPending: null /* Promise while a set is being written */, ai: { ai: false, provider: null, model: null }, sourceDoc: null /* {name, bytes} of the uploaded .docx */ };
+export const session = { page: 'overview', question: 0, isSample: false, questionsPending: null /* Promise while a set is being written */, ai: { ai: false, provider: null, model: null }, sourceDoc: null /* {name, bytes} of the uploaded .docx */, me: null /* signed-in user */ };
 
 // The uploaded .docx (binary) lives in IndexedDB when device saving is on; localStorage is text-only.
 const DB = 'roledone', STORE = 'files';
