@@ -72,7 +72,7 @@ const RANK_FALLBACK = { free: 0, pro: 1, premium: 2 };
 /** Minimum plan per AI endpoint. Scan summary stays free: it is the conversion hook. */
 const REQUIRED_PLAN = { '/api/suggestions': 'pro', '/api/gap-questions': 'pro', '/api/gap-bullet': 'pro', '/api/questions': 'pro', '/api/feedback': 'pro', '/api/structure': 'pro' };
 
-export function createHandler({ ai, root = resolve('dist'), rateLimit = createRateLimiter(), log = console, usage = null, billing = null, auth = null } = {}) {
+export function createHandler({ ai, root = resolve('dist'), rateLimit = createRateLimiter(), log = console, usage = null, billing = null, auth = null, adminEmails = (process.env.ROLEDONE_ADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean) } = {}) {
   const CSP = csp({ connect: auth ? [new URL(auth.publicConfig.url).origin] : [] });
   const send = (res, status, body, headers = {}) => {
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers });
@@ -93,6 +93,7 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
       const user = await userFor(req);
       if (user) {
         out.user = user;
+        if (user.email && adminEmails.includes(user.email.toLowerCase())) { consider('premium', { source: 'admin' }); out.admin = true; }
         const row = await auth.subscriptionForUser(user.id).catch(() => null);
         if (row) { out.subscription = row; consider(planFromRow(row), { source: 'account', status: row.status, periodEnd: row.period_end ? new Date(row.period_end).getTime() : null }); }
       }
@@ -109,7 +110,7 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
     if (pathname === '/api/status' && req.method === 'GET') return send(res, 200, { ...ai.status(), billing: Boolean(billing), plans: billing ? Object.keys(billing.stripe.prices) : [], auth: auth ? auth.publicConfig : null });
     if (pathname === '/api/me' && req.method === 'GET') {
       const e = await planFor(req);
-      return send(res, 200, { user: e.user, plan: e.plan, source: e.source, status: e.status, renews: e.periodEnd, subscribed: Boolean(e.subscription || e.claims) });
+      return send(res, 200, { user: e.user, plan: e.plan, source: e.source, status: e.status, renews: e.periodEnd, subscribed: Boolean(e.subscription || e.claims), admin: Boolean(e.admin) });
     }
 
     if (pathname === '/api/stripe/webhook' && req.method === 'POST') {

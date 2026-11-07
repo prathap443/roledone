@@ -96,3 +96,14 @@ test('CSP allows the browser to reach Supabase Auth when accounts are enabled', 
   const { call, close } = await serve({ ai: createAI(null), auth });
   try { assert.match((await call('/')).headers.get('content-security-policy'), /connect-src 'self' https:\/\/p\.supabase\.co/); } finally { await close(); }
 });
+
+test('admin emails get every feature without a subscription', async () => {
+  const { auth, stripe, entitlements } = fakeBackends();
+  const { call, close } = await serve({ ai: createAI(createMockProvider()), billing: { stripe, entitlements }, auth, adminEmails: ['u@x.com'] });
+  try {
+    const me = await (await call('/api/me', undefined, { Authorization: 'Bearer good' })).json();
+    assert.deepEqual([me.plan, me.source, me.admin], ['premium', 'admin', true]);
+    assert.equal((await call('/api/suggestions', { cv: sampleCV, draft: sampleCV, jd: sampleJD }, { Authorization: 'Bearer good' })).status, 200);
+    assert.equal((await call('/api/suggestions', { cv: sampleCV, draft: sampleCV, jd: sampleJD })).status, 402);
+  } finally { await close(); }
+});

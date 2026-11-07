@@ -30,7 +30,7 @@ export async function loadBilling() {
   try {
     const me = await request('/api/me');
     session.me = me.user;
-    session.billing = { plan: me.plan, status: me.status, renews: me.renews, subscribed: me.subscribed, source: me.source };
+    session.billing = { plan: me.plan, status: me.status, renews: me.renews, subscribed: me.subscribed, source: me.source, admin: me.admin };
   } catch { /* keep defaults */ }
   return session.billing;
 }

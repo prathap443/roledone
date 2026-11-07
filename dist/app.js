@@ -108,7 +108,7 @@ function showBilling() {
   const b = session.billing || {};
   const current = plan();
   const renews = b.renews ? new Date(b.renews).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : null;
-  const statusLine = b.subscribed
+  const statusLine = b.admin ? 'Admin account: every feature is unlocked without a subscription.' : b.subscribed
     ? (b.status === 'past_due' ? 'Last payment failed — update your card to keep access.' : b.status === 'canceled' ? 'Cancelled. Access continues until the end of the period.' : renews ? `Renews on ${renews}.` : 'Active.')
     : billingEnabled() ? 'You are on the Free plan: scan, score and see what is missing.' : 'Payments are not live yet.';
   modal(`<div class="eyebrow">PLAN &amp; BILLING</div>
@@ -168,8 +168,8 @@ function renderStatus() {
   si.textContent = currentUser() ? (currentUser().email || 'Account') : 'Sign in';
   si.classList.toggle('signed', Boolean(currentUser()));
   const chip = $('#plan-chip');
-  chip.textContent = b.subscribed ? `${PLANS[b.plan]?.label || 'Paid'}${b.status === 'past_due' ? ' · payment failed' : b.renews ? ` · renews ${new Date(b.renews).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}` : `${PLANS[current].label}${billingEnabled() && current === 'free' ? ' · See plans' : ''}`;
-  chip.classList.toggle('paid', Boolean(b.subscribed));
+  chip.textContent = b.admin ? 'Admin · all features' : b.subscribed ? `${PLANS[b.plan]?.label || 'Paid'}${b.status === 'past_due' ? ' · payment failed' : b.renews ? ` · renews ${new Date(b.renews).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}` : `${PLANS[current].label}${billingEnabled() && current === 'free' ? ' · See plans' : ''}`;
+  chip.classList.toggle('paid', Boolean(b.subscribed || b.admin));
   chip.classList.toggle('warn', b.status === 'past_due');
 }
 
