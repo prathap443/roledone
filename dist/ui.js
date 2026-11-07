@@ -61,7 +61,7 @@ export async function busy(button, label, action) {
     return await action();
   } catch (error) {
     toast(error.message || 'Something went wrong.');
-    if (error.status === 402) document.dispatchEvent(new CustomEvent('roledone:upgrade', { detail: error.code === 'quota' ? { quota: error } : null }));
+    if (error.status === 402) document.dispatchEvent(new CustomEvent('roledone:upgrade', { detail: { quota: error.code === 'quota' ? error : null, error } }));
     return undefined;
   } finally {
     if (button.isConnected) { button.disabled = false; button.removeAttribute('aria-busy'); button.innerHTML = original; }

@@ -207,7 +207,10 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
     let ent = null;
     if ((required && billing) || (feature && meter)) ent = await planFor(req);
     if (required && billing) { // without billing there is nothing to buy, so nothing to gate
-      if ((RANK_FALLBACK[ent.plan] ?? 0) < RANK_FALLBACK[required]) throw new HttpError(402, `This needs the ${required[0].toUpperCase() + required.slice(1)} plan.`);
+      if ((RANK_FALLBACK[ent.plan] ?? 0) < RANK_FALLBACK[required]) {
+        log.info?.(`[gate] ${pathname} 402 plan=${ent.plan} source=${ent.source} user=${ent.user ? ent.user.email || ent.user.id : 'none'} bearer=${bearer(req) ? 'yes' : 'no'} device-token=${req.headers['x-roledone-token'] ? 'yes' : 'no'}`);
+        throw new HttpError(402, `This needs the ${required[0].toUpperCase() + required.slice(1)} plan.`);
+      }
     }
     let metered = null;
     if (feature && meter) {

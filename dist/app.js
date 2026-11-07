@@ -236,7 +236,20 @@ ${session.billing?.subscribed ? '' : `<details class="developer"><summary>Develo
 $('#mobile-settings').onclick = () => $('#settings').click();
 
 document.addEventListener('roledone:billing', () => { renderStatus(); const h = $('.quota-hint'); if (h) h.outerHTML = match.quotaHint(); rebind(); });
-document.addEventListener('roledone:upgrade', (e) => { loadBilling().then(renderStatus).catch(() => {}); showPlans(e.detail?.quota ? { quota: e.detail.quota } : {}); });
+document.addEventListener('roledone:upgrade', async (e) => {
+  const before = plan();
+  await loadBilling().catch(() => {}); renderStatus();
+  const now = plan();
+  if (e.detail?.error && !e.detail.quota && before !== 'free') {
+    // The server refused a paid feature while this browser believed it was on a paid plan.
+    const b = session.billing || {};
+    if (now === 'free') toast(`Your sign-in or subscription could not be confirmed (server sees: ${PLANS[now].label}${b.user || currentUser() ? '' : ', not signed in'}). Sign in again and retry.`);
+    else toast(`The server refused this once (${e.detail.error.message}) but your plan is ${PLANS[now].label}. Please retry; if it repeats, reload the page.`);
+    if (now === 'free') showPlans({});
+    return;
+  }
+  showPlans(e.detail?.quota ? { quota: e.detail.quota } : {});
+});
 
 window.addEventListener('hashchange', () => {
   const next = location.hash.slice(1);

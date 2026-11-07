@@ -29,12 +29,13 @@ export function createSupabase({ url, anonKey, serviceKey, fetchImpl = fetch, no
 
     /** Resolve a Supabase access token to { id, email } or null. Cached briefly per token. */
     async userFromToken(token) {
-      if (!token || typeof token !== 'string' || token.length > 4096) return null;
+      if (!token || typeof token !== 'string' || token.length > 8192) return null;
       const key = createHash('sha256').update(token).digest('hex');
       const hit = userCache.get(key);
       if (hit && now() - hit.at < USER_TTL) return hit.user;
       const res = await fetchImpl(`${base}/auth/v1/user`, { headers: { apikey: anonKey, Authorization: `Bearer ${token}` } });
-      if (!res.ok) { userCache.set(key, { user: null, at: now() }); return null; }
+      if (res.status === 401 || res.status === 403) { userCache.set(key, { user: null, at: now() - USER_TTL + 30_000 }); return null; } // bad/expired token: remember for 30s only
+      if (!res.ok) throw Object.assign(new Error('Could not verify your sign-in just now. Try again in a moment.'), { status: 503 }); // Supabase blip: never downgrade a paying user silently
       const u = await res.json();
       const user = u?.id ? { id: u.id, email: u.email || null } : null;
       userCache.set(key, { user, at: now() });
