@@ -36,7 +36,7 @@ function rebind(root = document) {
   $$('[data-upgrade]', scope).forEach((b) => (b.onclick = showPlans));
 }
 
-const SELLABLE = ['pro']; // Premium goes on sale once its features exist
+const SELLABLE = ['pro', 'premium'];
 
 function showPlans({ quota = null } = {}) {
   const current = plan();

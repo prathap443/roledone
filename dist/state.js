@@ -28,6 +28,9 @@ export const blank = () => ({
   structured: null,     // { hash, cv } structured form of the draft used by templates
   scan: null,           // CV-only scan result
   scanSummary: null,    // Claude's read of the scan
+  followUps: {},        // question index -> [{ question, answer, feedback }] (Premium)
+  mock: null,           // timed mock session in progress or finished (Premium)
+  versions: [],         // saved CV drafts: [{ id, name, role, draft, at }] (Premium)
 });
 
 export const state = blank();
@@ -101,7 +104,7 @@ export function setSources({ cv = state.cv, jd = state.jd, sourceDoc }) {
     setSourceDoc(sourceDoc || null); // a pasted or re-uploaded CV no longer matches the old file
     state.draft = null; state.suggestions = null; state.dismissed = []; state.applied = []; state.scan = null; state.scanSummary = null; state.structured = null;
   }
-  if (cvChanged || jdChanged) { state.answers = {}; state.feedback = {}; state.requirements = null; state.matchMeta = null; state.questions = null; state.gaps = {}; session.question = 0; }
+  if (cvChanged || jdChanged) { state.answers = {}; state.feedback = {}; state.followUps = {}; state.mock = null; state.requirements = null; state.matchMeta = null; state.questions = null; state.gaps = {}; session.question = 0; }
   save();
 }
 

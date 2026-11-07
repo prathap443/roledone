@@ -141,6 +141,28 @@ export function validateFeedback(raw) {
   };
 }
 
+/** Mock-interview debrief: shape, caps, indices in range, score clamped. */
+export function validateDebrief(raw, count) {
+  const idx = (v) => (Number.isInteger(v) && v >= 0 && v < count ? v : null);
+  const VERDICTS = new Set(['strong', 'okay', 'weak', 'skipped']);
+  const per = [];
+  const seen = new Set();
+  for (const q of Array.isArray(raw?.per_question) ? raw.per_question : []) {
+    const i = idx(q?.index); if (i == null || seen.has(i)) continue; seen.add(i);
+    per.push({ index: i, verdict: VERDICTS.has(q?.verdict) ? q.verdict : 'okay', note: asText(q?.note, LIMITS.note) });
+  }
+  per.sort((a, b) => a.index - b.index);
+  const score = Math.max(0, Math.min(100, Math.round(Number(raw?.score) || 0)));
+  const ma = raw?.model_answer || {};
+  return {
+    overall: asText(raw?.overall, 1200),
+    score,
+    per_question: per,
+    priorities: (Array.isArray(raw?.priorities) ? raw.priorities : []).map((s) => asText(s, LIMITS.note)).filter(Boolean).slice(0, 3),
+    model_answer: idx(ma.index) != null && asText(ma.answer, 2500) ? { index: ma.index, answer: asText(ma.answer, 2500) } : null,
+  };
+}
+
 /** Generated interview questions: shape, caps, and no empty prompts. */
 export function validateQuestions(raw, { requirements = [], count = 5 } = {}) {
   const names = new Set(requirements.map((r) => normalise(r.name)));

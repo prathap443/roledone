@@ -54,6 +54,17 @@ export function createMockProvider() {
           follow_up: 'What would you do differently next time?',
         };
       }
+      if (tool.name === 'debrief_mock_interview') {
+        const items = context.items || [];
+        const answered = items.filter((it) => it.answer?.trim());
+        return {
+          overall: `Mock debrief (rule-based). You answered ${answered.length} of ${items.length} questions in time. Answers that named an outcome read strongest; the rest need a clearer result.`,
+          score: Math.round(100 * answered.length / Math.max(1, items.length)) - 10,
+          per_question: items.map((it, i) => ({ index: i, verdict: !it.answer?.trim() ? 'skipped' : /\d|result|reduc|improv/i.test(it.answer) ? 'strong' : 'okay', note: it.answer?.trim() ? 'State the outcome in one sentence.' : 'Skipped — practise a 60-second version.' })),
+          priorities: ['Finish every answer with the result.', 'Say "I" for your own contribution.'],
+          model_answer: answered.length ? { index: items.indexOf(answered[0]), answer: `Situation: ${answered[0].answer.slice(0, 80)}… Task: [add: what you were asked to achieve]. Action: [add: the steps you took]. Result: [add: what changed].` } : null,
+        };
+      }
       if (tool.name === 'write_questions') {
         const ev = context.requirements.filter((r) => r.status === 'evidence'), gaps = context.requirements.filter((r) => r.status !== 'evidence');
         const q = (prompt, type, focus) => ({ prompt, type, focus, why: 'Mock rationale.', listen_for: ['Specific example', 'Your own contribution'] });

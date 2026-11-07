@@ -31,7 +31,7 @@ function fakeBackends() {
     return json({ error: { message: 'nope' } }, 404);
   };
   const auth = createSupabase({ url: 'https://p.supabase.co', anonKey: 'anon', serviceKey: 'svc', fetchImpl });
-  const stripe = createStripe({ secretKey: 'sk_test_x', webhookSecret: 'whsec_x', prices: { pro: 'price_pro' }, appUrl: 'https://roledone.com', fetchImpl });
+  const stripe = createStripe({ secretKey: 'sk_test_x', webhookSecret: 'whsec_x', prices: { pro: 'price_pro', premium: 'price_premium' }, appUrl: 'https://roledone.com', fetchImpl });
   const entitlements = createEntitlements({ secret: 's', stripe });
   return { auth, stripe, entitlements, db, log };
 }
@@ -105,5 +105,30 @@ test('admin emails get every feature without a subscription', async () => {
     assert.deepEqual([me.plan, me.source, me.admin], ['premium', 'admin', true]);
     assert.equal((await call('/api/suggestions', { cv: sampleCV, draft: sampleCV, jd: sampleJD }, { Authorization: 'Bearer good' })).status, 200);
     assert.equal((await call('/api/suggestions', { cv: sampleCV, draft: sampleCV, jd: sampleJD })).status, 402);
+  } finally { await close(); }
+});
+
+test('Premium gates: follow-up reviews and the mock debrief need Premium; Pro gets plain feedback', async () => {
+  const { auth, stripe, entitlements, db } = fakeBackends();
+  const { call, close } = await serve({ ai: createAI(createMockProvider()), billing: { stripe, entitlements }, auth, adminEmails: ['admin@x.com'] });
+  const signed = { Authorization: 'Bearer good' };
+  const items = [{ prompt: 'Tell me about a pipeline you built.', answer: 'I built a daily ingestion pipeline in Data Factory that reduced manual refreshes to zero.', type: 'depth' }, { prompt: 'How do you test pipelines?', answer: '', type: 'depth' }, { prompt: 'Describe a conflict.', answer: 'A short one.', type: 'behavioural' }];
+  try {
+    // Make user-1 Pro via confirm
+    await call('/api/billing/confirm', { session_id: 'cs_test_abc' }, signed);
+    assert.equal(db.get('user-1').plan, 'pro');
+    const fb = { question: 'Q?', answer: 'During the migration I owned the loader and the result was a 40% faster run.', cv: sampleCV };
+    assert.equal((await call('/api/feedback', fb, signed)).status, 200, 'pro: plain feedback ok');
+    assert.equal((await call('/api/feedback', { ...fb, parent: { question: 'P?', answer: 'Earlier answer with enough words in it.' } }, signed)).status, 402, 'pro: follow-up gated');
+    assert.equal((await call('/api/mock-debrief', { cv: sampleCV, jd: sampleJD, level: 'technical', items }, signed)).status, 402, 'pro: debrief gated');
+    // Premium via device token
+    const premiumSub = { ...sub(), items: { data: [{ price: { id: 'price_premium' }, current_period_end: Math.floor(Date.now() / 1000) + 86400 }] } };
+    const token = entitlements.issue(entitlements.remember(stripe.subscriptionInfo(premiumSub)));
+    const prem = { 'x-roledone-token': token };
+    assert.equal((await call('/api/feedback', { ...fb, parent: { question: 'P?', answer: 'Earlier answer with enough words in it.' } }, prem)).status, 200);
+    const d = await (await call('/api/mock-debrief', { cv: sampleCV, jd: sampleJD, level: 'technical', items }, prem)).json();
+    assert.ok(d.debrief.score >= 0 && d.debrief.score <= 100); assert.equal(d.debrief.per_question.length, 3); assert.equal(d.debrief.per_question[1].verdict, 'skipped');
+    assert.equal((await call('/api/mock-debrief', { cv: sampleCV, items: items.slice(0, 2) }, prem)).status, 400, 'needs 3 questions');
+    assert.equal((await call('/api/mock-debrief', { cv: sampleCV, items: items.map((i) => ({ ...i, answer: '' })) }, prem)).status, 400, 'needs an answer');
   } finally { await close(); }
 });

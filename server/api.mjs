@@ -72,7 +72,7 @@ const reqList = (v) => (Array.isArray(v) ? v : []).slice(0, LIMITS.requirements)
 
 const RANK_FALLBACK = { free: 0, pro: 1, premium: 2 };
 /** Minimum plan per AI endpoint. Scan summary stays free: it is the conversion hook. */
-const REQUIRED_PLAN = { '/api/suggestions': 'pro', '/api/gap-questions': 'pro', '/api/gap-bullet': 'pro', '/api/questions': 'pro', '/api/feedback': 'pro', '/api/structure': 'pro' };
+const REQUIRED_PLAN = { '/api/suggestions': 'pro', '/api/gap-questions': 'pro', '/api/gap-bullet': 'pro', '/api/questions': 'pro', '/api/feedback': 'pro', '/api/structure': 'pro', '/api/mock-debrief': 'premium' };
 
 export function createHandler({ ai, root = resolve('dist'), rateLimit = createRateLimiter(), log = console, usage = null, billing = null, auth = null, jobs = null, blog = null, meter = null, adminEmails = (process.env.ROLEDONE_ADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean) } = {}) {
   const CSP = csp({ connect: auth ? [new URL(auth.publicConfig.url).origin] : [] });
@@ -221,12 +221,17 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
       metered = { subject, feature };
     }
     const ctx = { subject: metered?.subject || (ent ? meter?.subjectFor(req, ent.user) : null) || null, plan: ent?.plan || null };
-    const out = await usageContext.run(ctx, () => aiCall(req, res, pathname, metered));
+    const out = await usageContext.run(ctx, () => aiCall(req, res, pathname, metered, ent));
     return out;
   }
 
-  async function aiCall(req, res, pathname, metered) {
+  async function aiCall(req, res, pathname, metered, ent) {
     const body = await readJson(req);
+    // Feature-level gate inside a Pro endpoint: follow-up reviews are Premium.
+    if (pathname === '/api/feedback' && body.parent && billing) {
+      const plan = ent?.plan || (await planFor(req)).plan;
+      if ((RANK_FALLBACK[plan] ?? 0) < RANK_FALLBACK.premium) throw new HttpError(402, 'Answering follow-up questions needs the Premium plan.');
+    }
     if (metered) res.once('finish', () => { if (res.statusCode === 200) meter.bump(metered).catch((e) => log.error(`[meter] bump failed: ${e.message}`)); }); // count successful calls only
     if (pathname === '/api/match') {
       const cv = text(body.cv, LIMITS.text, 'cv'), jd = text(body.jd, LIMITS.text, 'jd');
@@ -269,7 +274,16 @@ export function createHandler({ ai, root = resolve('dist'), rateLimit = createRa
     if (pathname === '/api/feedback') {
       const question = text(body.question, LIMITS.question, 'question'), answer = text(body.answer, LIMITS.answer, 'answer'), cv = text(body.cv, LIMITS.text, 'cv', { required: false });
       if (answer.trim().split(/\s+/).length < 8) throw new HttpError(400, 'Write a few sentences before requesting a review.');
-      return send(res, 200, await ai.feedback({ question, answer, cv }));
+      const parent = body.parent ? { question: text(body.parent.question, LIMITS.question, 'parent.question'), answer: text(body.parent.answer, LIMITS.answer, 'parent.answer') } : null;
+      return send(res, 200, await ai.feedback({ question, answer, cv, parent }));
+    }
+    if (pathname === '/api/mock-debrief') {
+      const cv = text(body.cv, LIMITS.text, 'cv'), jd = text(body.jd, LIMITS.text, 'jd', { required: false });
+      const level = ['screening', 'technical', 'senior'].includes(body.level) ? body.level : 'technical';
+      const items = (Array.isArray(body.items) ? body.items : []).slice(0, 10).map((it, i) => ({ prompt: text(it?.prompt, LIMITS.question, `items[${i}].prompt`), answer: text(it?.answer, LIMITS.answer, `items[${i}].answer`, { required: false }), type: ['depth', 'gap', 'behavioural', 'scenario'].includes(it?.type) ? it.type : '' }));
+      if (items.length < 3) throw new HttpError(400, 'A mock session needs at least three questions.');
+      if (!items.some((it) => it.answer.trim().split(/\s+/).length >= 8)) throw new HttpError(400, 'Answer at least one question before asking for a debrief.');
+      return send(res, 200, await ai.mockDebrief({ cv, jd, level, items }));
     }
     throw new HttpError(404, 'Unknown endpoint');
   }

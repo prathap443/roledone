@@ -2,7 +2,7 @@
 // CV and JD text are untrusted input; they are wrapped in tags and the system prompt instructs
 // the model to treat them as data. Nothing leaves here without passing validate.mjs.
 
-import { validateMatch, validateSuggestions, validateFeedback, validateQuestions, validateGapQuestions, validateGapBullet, validateScanSummary, validateStructure } from './validate.mjs';
+import { validateMatch, validateSuggestions, validateFeedback, validateQuestions, validateGapQuestions, validateGapBullet, validateScanSummary, validateStructure, validateDebrief } from './validate.mjs';
 
 const GROUNDING_RULES = `You are the analysis engine inside Roledone, a career studio for UK tech professionals.
 Non-negotiable rules:
@@ -177,7 +177,27 @@ const STRUCTURE_TOOL = {
   },
 };
 
-const ALL_TOOLS = [MATCH_TOOL, SUGGEST_TOOL, FEEDBACK_TOOL, QUESTIONS_TOOL, GAP_QUESTIONS_TOOL, GAP_BULLET_TOOL, SCAN_TOOL, STRUCTURE_TOOL];
+const DEBRIEF_TOOL = {
+  name: 'debrief_mock_interview',
+  description: 'Debrief a timed mock interview: several questions answered in one sitting. Judge structure and clarity, not technical correctness. Ground every suggestion in the candidate\'s CV; never invent experience.',
+  input_schema: {
+    type: 'object', required: ['overall', 'score', 'per_question', 'priorities', 'model_answer'],
+    properties: {
+      overall: { type: 'string', description: 'Three or four sentences on how the session went as a whole: pacing, structure, where the candidate was strongest and weakest.' },
+      score: { type: 'integer', minimum: 0, maximum: 100, description: 'Readiness for THIS stage, 0–100, based on structure and completeness of the answers given. 70+ means most answers had a clear action and outcome.' },
+      per_question: { type: 'array', items: { type: 'object', required: ['index', 'verdict', 'note'], properties: {
+        index: { type: 'integer', description: '0-based index of the question in the session.' },
+        verdict: { type: 'string', enum: ['strong', 'okay', 'weak', 'skipped'] },
+        note: { type: 'string', description: 'One sentence: the single most useful thing to change in this answer.' } } } },
+      priorities: { type: 'array', items: { type: 'string' }, description: 'Two or three things to practise before the real interview, most important first.' },
+      model_answer: { type: 'object', required: ['index', 'answer'], properties: {
+        index: { type: 'integer', description: 'The question whose answer most needed restructuring.' },
+        answer: { type: 'string', description: 'That answer rewritten in STAR form using ONLY facts the candidate gave in their answer or that appear in the CV. Where a fact is missing, write [add: what happened] rather than inventing it.' } } },
+    },
+  },
+};
+
+const ALL_TOOLS = [MATCH_TOOL, SUGGEST_TOOL, FEEDBACK_TOOL, QUESTIONS_TOOL, GAP_QUESTIONS_TOOL, GAP_BULLET_TOOL, SCAN_TOOL, STRUCTURE_TOOL, DEBRIEF_TOOL];
 
 /**
  * Cache-friendly request: identical tool set and system prompt every time, CV first and cached,
@@ -295,14 +315,25 @@ export function createAI(provider) {
       return { structured, meta: { provider: provider.name, model: provider.model, dropped } };
     },
 
-    async feedback({ question, answer, cv }) {
+    async feedback({ question, answer, cv, parent = null }) {
       const raw = await request(provider, {
         tool: FEEDBACK_TOOL, tier: 'fast', cv,
-        task: `Review this practice answer. Assess structure (Situation, Task, Action, Result), clarity of the candidate's personal contribution, and whether the outcome is explained. You are not assessing technical correctness. Be specific to what they wrote.${cv ? ' Use the CV above only to notice relevant experience they could have mentioned.' : ''}\n\n${wrap('question', question)}\n\n${wrap('answer', answer)}`,
-        context: { question, answer, cv },
+        task: `Review this practice answer. Assess structure (Situation, Task, Action, Result), clarity of the candidate's personal contribution, and whether the outcome is explained. You are not assessing technical correctness. Be specific to what they wrote.${cv ? ' Use the CV above only to notice relevant experience they could have mentioned.' : ''}${parent ? ` This is a FOLLOW-UP question to an earlier answer, shown below; judge whether the follow-up answer adds the missing depth rather than repeating the first answer. The next follow_up you propose must dig one level deeper still (a trade-off, a number, what they would change), or be an empty string if the thread is exhausted.\n\n${wrap('earlier_question', parent.question)}\n\n${wrap('earlier_answer', parent.answer)}` : ''}\n\n${wrap('question', question)}\n\n${wrap('answer', answer)}`,
+        context: { question, answer, cv, parent },
         maxTokens: 1500,
       });
       return { feedback: validateFeedback(raw), meta: { provider: provider.name, model: provider.model } };
+    },
+
+    async mockDebrief({ cv, jd, level, items }) {
+      const transcript = items.map((it, i) => `Q${i + 1} (${it.type || 'question'}): ${it.prompt}\nA${i + 1}: ${it.answer?.trim() ? it.answer : '[no answer given in time]'}`).join('\n\n');
+      const raw = await request(provider, {
+        tool: DEBRIEF_TOOL, tier: 'fast', cv, jd,
+        task: `Debrief this timed mock ${level || 'technical'} interview. The candidate had about two minutes per question. Judge structure (Situation, Task, Action, Result), clarity of their own contribution and whether outcomes were stated — not technical correctness. Mark unanswered questions as skipped. In model_answer use only facts from the candidate's answers or the CV above; write [add: …] placeholders for anything missing rather than inventing.\n\n${wrap('transcript', transcript)}`,
+        context: { cv, jd, items },
+        maxTokens: 2500,
+      });
+      return { debrief: validateDebrief(raw, items.length), meta: { provider: provider.name, model: provider.model } };
     },
   };
 }

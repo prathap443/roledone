@@ -1,5 +1,5 @@
 import { state, session, setDraft, requirements, currentDraft, save } from '../state.js';
-import { $, $$, esc, heading, empty, toast, busy, download, confirm, locked } from '../ui.js';
+import { $, $$, esc, heading, empty, toast, busy, download, confirm, locked, modal, closeModal } from '../ui.js';
 import { can, needs } from '../plans.js';
 import * as api from '../api.js';
 import { toDocxBlob, printCV } from '../export.js';
@@ -27,6 +27,7 @@ export function render() {
   <ul class="rule-list"><li>What did you build, change, or own?</li><li>Which tools did you actually use?</li><li>Who benefited, and what changed?</li><li>Can you explain the result in an interview?</li></ul>
  </section>
  <section class="panel"><h2>Your next version <span class="tag">YOU’RE THE EDITOR</span></h2>
+  ${versionsBar()}
   <label class="field">Editable CV draft<textarea id="draft" class="editor-area" maxlength="50000">${esc(currentDraft())}</textarea></label>
   <div class="actions">
    ${ai ? '<button class="primary lime" id="suggest">Suggest clearer wording ✧</button>' : ''}
@@ -61,9 +62,47 @@ ${visible.map((s) => `<article class="suggestion ${applied.has(s.id) ? 'applied'
 </section>`;
 }
 
-export function bind({ rebind }) {
+/** Premium: named snapshots of the draft, one set per workspace, labelled with the role they were made for. */
+const roleLabel = () => session.job?.title ? `${session.job.title}${session.job.company ? ` · ${session.job.company}` : ''}` : (state.jd || '').split('\n').find((l) => l.trim())?.trim().replace(/[.:;,-].*$/, '').slice(0, 40) || 'No role';
+function versionsBar() {
+  if (!can('versions')) return `<div class="versions locked-inline"><p>Keep a saved version of your CV for every role you apply to, and switch between them.</p><button class="secondary small" data-upgrade>Unlock with Premium</button></div>`;
+  const vs = state.versions || [];
+  const cur = vs.find((v) => v.id === session.versionId);
+  return `<div class="versions">
+ <label class="field inline">Saved versions<select id="version-pick"><option value="">${vs.length ? 'Working draft' : 'No saved versions yet'}</option>${vs.map((v) => `<option value="${v.id}" ${v.id === session.versionId ? 'selected' : ''}>${esc(v.name)} — ${esc(v.role)}</option>`).join('')}</select></label>
+ <button class="secondary small" id="version-save">Save as version</button>
+ ${cur ? `<button class="text-button" id="version-delete">Delete “${esc(cur.name)}”</button>` : ''}
+ <span class="hint">${vs.length ? `${vs.length} saved · each one remembers the role it was written for.` : 'Snapshot the draft before tailoring it to the next role.'}</span>
+</div>`;
+}
+
+export function bind({ rebind, render: rerender }) {
   const draftArea = $('#draft');
   if (!draftArea) return;
+  $('#version-save')?.addEventListener('click', () => {
+    const suggested = roleLabel().split(' · ')[0].slice(0, 40);
+    modal(`<h2>Save this version</h2><p class="hint">For <strong>${esc(roleLabel())}</strong>. You can switch back to it any time.</p><label class="field">Name<input id="version-name" maxlength="60" value="${esc(suggested)}"></label><div class="actions"><button class="primary" id="version-ok">Save version</button><button class="secondary" id="version-cancel">Cancel</button></div>`);
+    $('#version-name').focus(); $('#version-name').select();
+    $('#version-cancel').onclick = closeModal;
+    $('#version-ok').onclick = () => {
+      const name = $('#version-name').value.trim() || suggested;
+      const v = { id: crypto.randomUUID(), name, role: roleLabel(), draft: draftArea.value, at: new Date().toISOString() };
+      state.versions = [v, ...(state.versions || [])].slice(0, 30);
+      session.versionId = v.id; save(); closeModal(); rerender(); toast(`Saved “${name}”.`);
+    };
+  });
+  $('#version-pick')?.addEventListener('change', async (e) => {
+    const id = e.target.value;
+    const v = (state.versions || []).find((x) => x.id === id);
+    if (!v) { session.versionId = null; rerender(); return; }
+    if (draftArea.value !== (session.versionId ? (state.versions.find((x) => x.id === session.versionId)?.draft) : draftArea.value) && !(await confirm({ title: 'Switch version?', body: 'Your current working draft is replaced by the saved version. Save it as a version first if you want to keep it.', action: 'Switch' }))) { e.target.value = session.versionId || ''; return; }
+    setDraft(v.draft); session.versionId = v.id; rerender(); toast(`Loaded “${v.name}”.`);
+  });
+  $('#version-delete')?.addEventListener('click', async () => {
+    const v = state.versions.find((x) => x.id === session.versionId); if (!v) return;
+    if (!(await confirm({ title: `Delete “${v.name}”?`, body: 'The saved snapshot is removed. Your current draft stays as it is.', action: 'Delete' }))) return;
+    state.versions = state.versions.filter((x) => x.id !== v.id); session.versionId = null; save(); rerender();
+  });
   draftArea.addEventListener('input', (e) => setDraft(e.target.value));
   $('#export').onclick = () => download('roledone-cv.txt', draftArea.value, 'text/plain');
   $('#export-docx').onclick = (e) => busy(e.currentTarget, 'Building…', async () => {

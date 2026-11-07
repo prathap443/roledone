@@ -22,8 +22,8 @@ export const FEATURES = {
   feedback: 'pro',
   regenerate: 'pro',
   followUps: 'premium',
+  mock: 'premium',
   versions: 'premium',
-  exportDocx: 'premium',
 };
 
 /** Effective plan: paid subscription on this device, else the server default, else a developer-preview override. */
@@ -44,6 +44,7 @@ export const COMPARISON = [
   ['CV studio, four templates, Word / PDF export', '—', '✓', '✓'],
   ['Interview questions written for this role', '—', '✓', '✓'],
   ['Answer review (STAR)', '—', '✓', '✓'],
-  ['Follow-up questions and mock session', '—', '—', '✓'],
-  ['Multiple CV versions per role', '—', '—', '✓'],
+  ['Answer the interviewer’s follow-ups, three levels deep', '—', '—', '✓'],
+  ['Timed mock session with a scored debrief', '—', '—', '✓'],
+  ['Saved CV versions per role', '—', '—', '✓'],
 ];

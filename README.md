@@ -111,3 +111,11 @@ Keep secrets out of source control. Before accepting real customer uploads, impl
 Role match and CV suggestions (the two Sonnet calls) are metered per calendar month: Free 3 matches, Pro 60 matches + 60 suggestion runs, Premium 200 + 200 (`ROLEDONE_LIMITS` to change). Counted per account, else per device id, else per hashed IP. Admins are never metered. Over the cap the API returns 402 with `code: "quota"` and the app opens the plans dialog.
 
 Run `supabase/migrations/002_usage.sql` to keep counters and the AI usage ledger across restarts. Admins see per-feature cost for the month under Plan & billing → “Usage & cost this month”; `GET /api/usage` is admin-only.
+
+## Premium features
+
+- **Follow-up threads** — after a review, answer the interviewer's follow-up and get that reviewed too, up to three levels (`/api/feedback` with `parent`; Premium-gated server-side).
+- **Timed mock session** — six questions from the current set, two minutes each, no feedback until the end; then `/api/mock-debrief` returns a readiness score, a note per answer, priorities and one answer rebuilt in STAR form from the candidate's own words and CV (Haiku; validated).
+- **Saved CV versions** — snapshot the draft per role and switch between versions (client-side, in workspace state).
+
+To sell Premium: create a second recurring price in Stripe and set `STRIPE_PRICE_PREMIUM`.

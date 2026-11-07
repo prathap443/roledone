@@ -114,3 +114,11 @@ test('gap bullet: empty bullets never pass, needs_detail carries a follow-up and
   const final = validateGapBullet({ verdict: 'needs_detail', bullet: '', explanation: 'e', learning_line: '', follow_up: 'Again?' }, { ...base, finalRound: true });
   assert.equal(final.verdict, 'unsupported');
 });
+
+test('validateDebrief clamps score, drops bad indices, caps priorities', async () => {
+  const { validateDebrief } = await import('../server/validate.mjs');
+  const d = validateDebrief({ overall: 'ok', score: 140, per_question: [{ index: 0, verdict: 'strong', note: 'a' }, { index: 7, verdict: 'weak', note: 'x' }, { index: 0, verdict: 'weak', note: 'dup' }, { index: 2, verdict: 'nonsense', note: 'b' }], priorities: ['1', '2', '3', '4'], model_answer: { index: 9, answer: 'nope' } }, 3);
+  assert.equal(d.score, 100); assert.deepEqual(d.per_question.map((x) => [x.index, x.verdict]), [[0, 'strong'], [2, 'okay']]);
+  assert.equal(d.priorities.length, 3); assert.equal(d.model_answer, null);
+  assert.deepEqual(validateDebrief({ model_answer: { index: 1, answer: 'Situation…' } }, 3).model_answer, { index: 1, answer: 'Situation…' });
+});
