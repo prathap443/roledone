@@ -27,13 +27,17 @@ async function request(path, body) {
 
 export const billingEnabled = () => Boolean(session.ai?.billing);
 export async function loadBilling() {
-  session.billing = { plan: null, subscribed: false };
-  session.me = null;
+  // Keep the last known plan until the new answer arrives: anything rendered in between must not
+  // see a momentary "free". Only a definitive answer (or a first load) replaces it.
+  if (!session.billing) session.billing = { plan: null, subscribed: false };
   try {
     const me = await request('/api/me');
     session.me = me.user;
     session.billing = { plan: me.plan, status: me.status, renews: me.renews, subscribed: me.subscribed, source: me.source, admin: me.admin, quota: me.quota };
-  } catch { /* keep defaults */ }
+  } catch (error) {
+    if (error.status === 401 || error.status === 403) { session.me = null; session.billing = { plan: null, subscribed: false }; } // definitively signed out
+    /* otherwise keep what we had */
+  }
   return session.billing;
 }
 export const attachDeviceSubscription = () => request('/api/billing/attach', {});

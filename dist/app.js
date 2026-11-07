@@ -237,7 +237,8 @@ ${session.billing?.admin && !session.billing?.subscribed ? `<details class="deve
 };
 $('#mobile-settings').onclick = () => $('#settings').click();
 
-document.addEventListener('roledone:billing', () => { renderStatus(); const h = $('.quota-hint'); if (h) h.outerHTML = match.quotaHint(); rebind(); });
+let lastPlan = null;
+document.addEventListener('roledone:billing', () => { renderStatus(); if (lastPlan !== null && lastPlan !== plan()) { render(); } else { const h = $('.quota-hint'); if (h) h.outerHTML = match.quotaHint(); rebind(); } lastPlan = plan(); });
 document.addEventListener('roledone:upgrade', async (e) => {
   const before = plan();
   await loadBilling().catch(() => {}); renderStatus();

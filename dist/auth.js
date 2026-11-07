@@ -75,5 +75,6 @@ export async function signOut() {
   const s = read();
   write(null);
   session.me = null;
+  session.billing = { plan: null, subscribed: false };
   if (s?.access_token && config) { try { await fetch(`${config.url}/auth/v1/logout`, { method: 'POST', headers: { apikey: config.anonKey, Authorization: `Bearer ${s.access_token}` } }); } catch { /* ignore */ } }
 }
