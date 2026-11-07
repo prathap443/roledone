@@ -389,3 +389,4 @@ footer.site-footer .legalline span:last-child{letter-spacing:0}
 .play-overlay:hover span{transform:scale(1.06)}
 .play-overlay.hidden{opacity:0;pointer-events:none}
 @media(max-width:900px){.watch{grid-template-columns:1fr;padding:22px}}
+.job-tags .tag.src{background:#eceee7;color:var(--muted);margin-left:auto}

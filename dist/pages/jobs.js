@@ -14,7 +14,7 @@ export function jobCard(j, { compact = false } = {}) {
  <header><span class="job-logo" style="--h:${hue(j.company)}">${esc(initials(j.company))}</span><div><h3 title="${esc(j.title)}">${esc(j.title)}</h3><p>${esc(j.company)}</p></div></header>
  <ul class="job-facts"><li><span>◎</span>${esc(j.location)}${j.remote && !/remote/i.test(j.location) ? ' · Remote' : ''}</li><li><span>¤</span>${j.salary ? esc(j.salary) : 'Salary not stated'}</li></ul>
  <p class="job-summary">${esc(j.summary)}${j.summary.length >= 320 ? '…' : ''}</p>
- <div class="job-tags">${j.type ? `<span class="tag">${esc(j.type)}</span>` : ''}${j.category ? `<span class="tag">${esc(j.category)}</span>` : ''}${ago(j.posted) ? `<span class="tag muted">${ago(j.posted)}</span>` : ''}</div>
+ <div class="job-tags">${j.type ? `<span class="tag">${esc(j.type)}</span>` : ''}${j.category ? `<span class="tag">${esc(j.category)}</span>` : ''}${ago(j.posted) ? `<span class="tag muted">${ago(j.posted)}</span>` : ''}${j.source && j.source !== 'Sample' ? `<span class="tag src">${esc(j.source)}</span>` : ''}</div>
  <div class="job-actions"><button class="primary small" data-scan="${esc(j.id)}">Scan my CV for this role ✧</button>${j.url ? `<a class="secondary small" href="${esc(j.url)}" target="_blank" rel="noopener">View advert ↗</a>` : ''}</div>
 </article>`;
 }
@@ -29,12 +29,12 @@ export function render() {
  <label class="field">Country<select id="jobs-country">${Object.entries(countries).map(([k, v]) => `<option value="${k}" ${k === (q.country || 'gb') ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></label>
  <button class="primary" type="submit">Search roles ↗</button>
 </form>
-<div id="jobs-results" class="jobs-results">${session.jobs?.result ? resultsHtml(session.jobs.result) : '<p class="hint">Try “data engineer”, “platform”, or the name of a tool you know well. Results come from public job boards; Roledone never sends your CV to them.</p>'}</div>`;
+<div id="jobs-results" class="jobs-results">${session.jobs?.result ? resultsHtml(session.jobs.result) : '<p class="hint">Try “data engineer”, “platform”, or the name of a tool you know well. Results are merged from public job boards and company career sites; Roledone sends them only your search words, never your CV. Add a location to focus on one place; leave it blank to include remote roles.</p>'}</div>`;
 }
 
 function resultsHtml(r) {
   if (!r.jobs.length) return '<div class="empty-state"><h3>No roles found</h3><p>Try fewer words, a broader location, or another country.</p></div>';
-  return `<div class="section-heading"><h2>${r.total ? `${r.total.toLocaleString('en-GB')} roles` : `${r.jobs.length} roles`}</h2><span>VIA ${esc(String(r.source).toUpperCase())}${r.jobs[0]?.partial ? ' · SUMMARIES; FULL ADVERT ON THE SOURCE' : ''}</span></div>
+  return `<div class="section-heading"><h2>${r.total ? `${r.total.toLocaleString('en-GB')} roles` : `${r.jobs.length} roles`}</h2><span>FROM ${esc([...new Set(r.jobs.map((j) => j.source))].join(' · ').toUpperCase())}</span></div>
 <div class="job-grid">${r.jobs.map((j) => jobCard(j)).join('')}</div>
 ${r.hasMore ? '<div class="actions"><button class="secondary" id="jobs-more">More roles</button></div>' : ''}`;
 }

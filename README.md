@@ -103,7 +103,7 @@ Keep secrets out of source control. Before accepting real customer uploads, impl
 
 ## Jobs and the blog
 
-- **Jobs** (`#jobs`, and the Featured roles carousel on Overview) search live adverts through `GET /api/jobs`. Set `ADZUNA_APP_ID` and `ADZUNA_APP_KEY` for Adzuna (UK, US, 17 more countries, salaries); without them Arbeitnow is used (no key). "Scan my CV for this role" drops the advert into Role match. Only the search words go to the job source, never the CV.
+- **Jobs** (`#jobs`, and the Featured roles carousel on Overview) search live adverts through `GET /api/jobs`, which fans out to every configured source in parallel, normalises, de-duplicates (title + company, preferring the copy with a full description) and ranks by relevance then recency. Sources: Adzuna (`ADZUNA_APP_ID`/`ADZUNA_APP_KEY`), Reed (`REED_API_KEY`, UK), Jooble (`JOOBLE_API_KEY`), The Muse, Remotive, RemoteOK, Himalayas and Arbeitnow (no keys), plus any Greenhouse boards / Lever companies you list. A failing source is skipped for a minute, never fatal. "Scan my CV for this role" drops the advert into Role match. Only the search words go to the sources, never the CV. Indeed and LinkedIn have no public listing APIs and are deliberately not scraped.
 - **Blog** is server-rendered from `content/blog/*.md` at `/blog` and `/blog/<slug>` (plus `/sitemap.xml` and `/robots.txt`). Add a post: create `content/blog/YYYY-MM-DD-slug.md` with `title`, `description`, `date`, `tags`, optional `level` in the frontmatter, commit, redeploy. Markdown supports headings, lists, code fences, tables, quotes and links.
 
 ## Metering and cost visibility

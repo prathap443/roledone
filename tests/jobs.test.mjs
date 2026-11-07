@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createJobs, createMockJobs, normaliseAdzuna, normaliseArbeitnow, salaryLabel, jobsFromEnv } from '../server/jobs.mjs';
+import { createJobs, createMockJobs, normaliseAdzuna, normaliseArbeitnow, normaliseReed, normaliseJooble, normaliseGreenhouse, normaliseLever, salaryLabel, jobsFromEnv, relevance, mergeJobs } from '../server/jobs.mjs';
 
 test('salaryLabel formats ranges, singles and predictions', () => {
   assert.equal(salaryLabel({ min: 60000, max: 80000 }), '£60k – £80k');
@@ -20,22 +20,65 @@ test('normaliseArbeitnow maps fields', () => {
   assert.equal(j.id, 'arbeitnow:abc'); assert.equal(j.remote, true); assert.equal(j.type, 'Full time'); assert.equal(j.category, 'Data Science'); assert.match(j.description, /Do things/); assert.equal(j.partial, false);
 });
 
-test('createJobs uses Adzuna when keys are present and caches', async () => {
+test('aggregator: queries every enabled source in parallel, caches, dedupes, prefers full descriptions', async () => {
   const calls = [];
-  const fetchImpl = async (url) => { calls.push(url); return { ok: true, json: async () => ({ count: 1, results: [{ id: '1', title: 'T', company: {}, location: {}, description: 'd', redirect_url: 'u' }] }) }; };
-  const jobs = createJobs({ adzunaId: 'id', adzunaKey: 'key', fetchImpl, now: () => 1000 });
-  assert.equal(jobs.source, 'Adzuna');
-  const r1 = await jobs.search({ q: 'data', country: 'us', page: 1 });
-  const r2 = await jobs.search({ q: 'data', country: 'us', page: 1 });
-  assert.equal(calls.length, 1); assert.match(calls[0], /jobs\/us\/search\/1\?/); assert.match(calls[0], /app_key=key/);
-  assert.equal(r1.jobs[0].id, 'adzuna:1'); assert.equal(r2, r1);
+  const fetchImpl = async (url, init) => {
+    calls.push(url);
+    const json = (body) => ({ ok: true, json: async () => body });
+    if (url.includes('adzuna')) return json({ count: 1, results: [{ id: '1', title: 'Data Engineer', company: { display_name: 'Acme' }, location: { display_name: 'Leeds' }, description: 'short', redirect_url: 'u1' }] });
+    if (url.includes('reed.co.uk')) { assert.match(init.headers.Authorization, /^Basic /); return json({ results: [{ jobId: 9, jobTitle: 'Data Engineer', employerName: 'Acme', locationName: 'Leeds', minimumSalary: 50000, maximumSalary: 60000, jobDescription: 'snippet', jobUrl: 'u2', date: '01/11/2026' }] }); }
+    if (url.includes('remotive')) return json({ jobs: [{ id: 5, title: 'Data Engineer', company_name: 'Acme', url: 'u3', description: '<p>Full description of the data engineer role</p>', job_type: 'full_time', publication_date: '2026-11-02T00:00:00' }] });
+    if (url.includes('remoteok')) return json([{ legal: 'notice' }, { id: 7, position: 'Platform Engineer', company: 'Harbour', url: 'u4', description: 'k8s', tags: ['devops'], date: '2026-11-03T00:00:00Z' }]);
+    if (url.includes('himalayas')) return json({ jobs: [] });
+    if (url.includes('themuse')) return json({ results: [] });
+    if (url.includes('arbeitnow')) return json({ data: [] });
+    throw new Error('unexpected ' + url);
+  };
+  const jobs = createJobs({ adzunaId: 'id', adzunaKey: 'key', reedKey: 'rk', fetchImpl, now: () => 1000 });
+  assert.deepEqual(jobs.sources, ['Adzuna', 'Reed', 'The Muse', 'Remotive', 'RemoteOK', 'Himalayas', 'Arbeitnow']);
+  const r1 = await jobs.search({ q: 'data engineer', country: 'gb', page: 1 });
+  const n = calls.length; assert.equal(n, 7, 'one call per source');
+  // Three sources returned the same role at Acme: one card, the full-text one wins
+  const acme = r1.jobs.filter((j) => j.company === 'Acme');
+  assert.equal(acme.length, 1); assert.equal(acme[0].source, 'Remotive'); assert.equal(acme[0].partial, false);
+  assert.ok(r1.jobs.find((j) => j.title === 'Platform Engineer'), 'remoteok included (data matched? no) — platform engineer matches "engineer"');
+  const r2 = await jobs.search({ q: 'data engineer', country: 'gb', page: 1 });
+  assert.equal(calls.length, n, 'second search served from cache'); assert.equal(r2.jobs.length, r1.jobs.length);
+  // A city search excludes remote boards; a non-UK country excludes Reed
+  await jobs.search({ q: 'data', where: 'Leeds', country: 'gb' });
+  assert.ok(!calls.slice(n).some((u) => u.includes('remotive')), 'remote boards skipped for a city');
+  const m = calls.length;
+  await jobs.search({ q: 'data', country: 'us' });
+  assert.ok(!calls.slice(m).some((u) => u.includes('reed.co.uk')), 'Reed skipped outside the UK');
 });
 
-test('createJobs falls back to Arbeitnow and rejects bad upstream', async () => {
-  const jobs = createJobs({ fetchImpl: async () => ({ ok: false, status: 503 }) });
-  assert.equal(jobs.source, 'Arbeitnow');
-  await assert.rejects(jobs.search({ q: 'x' }), /503/);
-  assert.deepEqual((await jobs.featured()).jobs, []); // featured never throws
+test('aggregator: a failing source is dropped, not fatal; featured interleaves sources', async () => {
+  const fetchImpl = async (url) => {
+    if (url.includes('arbeitnow')) return { ok: true, json: async () => ({ data: [{ slug: 'a', title: 'ML Engineer', company_name: 'X', url: 'u', description: 'd', remote: true, tags: [], job_types: [], created_at: 1700000000 }] }) };
+    return { ok: false, status: 503 };
+  };
+  const jobs = createJobs({ fetchImpl, log: { warn() {} } });
+  const r = await jobs.search({ q: 'engineer' });
+  assert.equal(r.jobs.length, 1); assert.equal(r.jobs[0].source, 'Arbeitnow');
+  const f = await jobs.featured();
+  assert.equal(f.jobs.length, 1);
+});
+
+test('relevance and merge ranking', () => {
+  const mk = (title, company, partial, posted) => ({ id: title, title, company, summary: '', category: '', partial, posted });
+  assert.equal(relevance(mk('Data Engineer', 'A', true), 'data engineer'), 6);
+  assert.equal(relevance(mk('Baker', 'A', true), 'data'), 0);
+  const m = mergeJobs([[mk('Data Engineer', 'Acme', true, '2026-01-01'), mk('Analyst', 'B', false, '2026-01-02')], [mk('Data Engineer', 'Acme Ltd', false, '2026-01-01'), mk('Data Platform Engineer', 'C', false, '2026-02-01')]], 'data engineer');
+  assert.deepEqual(m.jobs.map((j) => j.title), ['Data Platform Engineer', 'Data Engineer']); // Analyst filtered out; Acme deduped to the full-text copy
+  assert.equal(m.jobs[1].partial, false);
+});
+
+test('normalisers for the new sources', () => {
+  assert.equal(normaliseReed({ jobId: 1, jobTitle: 'T', employerName: 'E', locationName: 'Bristol', minimumSalary: 40000, maximumSalary: 40000, currency: 'GBP', jobDescription: '<b>x</b>', jobUrl: 'u', date: '05/11/2026' }).salary, '£40k');
+  assert.equal(normaliseJooble({ id: 'j', title: 'T', company: 'C', location: 'Berlin', snippet: 's', link: 'u', updated: '2026-11-01T00:00:00Z' }).posted, '2026-11-01T00:00:00.000Z');
+  assert.equal(normaliseGreenhouse({ id: 3, title: 'T', location: { name: 'Remote - UK' }, content: '&lt;p&gt;Body&lt;/p&gt;', absolute_url: 'u' }, 'acme-co').company, 'Acme Co');
+  assert.equal(normaliseGreenhouse({ id: 3, title: 'T', location: { name: 'Remote - UK' }, content: '&lt;p&gt;Body&lt;/p&gt;', absolute_url: 'u' }, 'acme-co').description, 'Body');
+  assert.equal(normaliseLever({ id: 'l', text: 'T', categories: { location: 'London', commitment: 'Full-time' }, descriptionPlain: 'd', hostedUrl: 'u', createdAt: 1700000000000 }, 'monzo').type, 'Full-time');
 });
 
 test('mock jobs filter the fixture', async () => {
@@ -43,5 +86,5 @@ test('mock jobs filter the fixture', async () => {
   assert.equal((await m.search({ q: 'agent' })).jobs.length, 1);
   assert.ok((await m.featured()).jobs.length >= 5);
   assert.equal(jobsFromEnv({ ROLEDONE_PROVIDER: 'mock' }).source, 'Sample');
-  assert.equal(jobsFromEnv({ ADZUNA_APP_ID: 'a', ADZUNA_APP_KEY: 'b' }).source, 'Adzuna');
+  assert.ok(jobsFromEnv({ ADZUNA_APP_ID: 'a', ADZUNA_APP_KEY: 'b' }).sources.includes('Adzuna'));
 });
