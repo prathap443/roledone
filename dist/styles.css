@@ -306,3 +306,9 @@ a.secondary{text-decoration:none;display:inline-flex;align-items:center;border:1
 @keyframes shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
 .footer-link{color:var(--green);text-decoration:none;font-weight:600}
 @media(max-width:800px){.jobs-search{grid-template-columns:1fr 1fr}.jobs-search .primary{grid-column:1/-1}.carousel-nav{display:none}}
+
+.carousel.marquee{scroll-snap-type:none;scroll-behavior:auto}
+.carousel.marquee .job-card{scroll-snap-align:none}
+.carousel-wrap::before,.carousel-wrap::after{content:'';position:absolute;top:0;bottom:0;width:48px;z-index:1;pointer-events:none}
+.carousel-wrap::before{left:0;background:linear-gradient(90deg,var(--paper),transparent)}
+.carousel-wrap::after{right:0;background:linear-gradient(270deg,var(--paper),transparent)}

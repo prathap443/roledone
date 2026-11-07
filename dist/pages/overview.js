@@ -40,10 +40,49 @@ export function bind({ loadSample, navigate, rebind }) {
     const c = $('#carousel'); if (!c) return;
     c.innerHTML = featured.length ? featured.map((j) => jobCard(j, { compact: true })).join('') : '<p class="hint">No roles to show right now. <button class="text-button" data-page="jobs">Search roles</button></p>';
     rebind(c); bindScan(featured, navigate);
+    startMarquee(c, navigate);
   };
   if (featured) paint();
   else featuredJobs().then((r) => { featured = r.jobs || []; paint(); }).catch(() => { featured = []; paint(); });
   const step = () => Math.max(260, ($('#carousel')?.clientWidth || 900) * 0.6);
-  $('#car-prev').onclick = () => $('#carousel').scrollBy({ left: -step(), behavior: 'smooth' });
-  $('#car-next').onclick = () => $('#carousel').scrollBy({ left: step(), behavior: 'smooth' });
+  $('#car-prev').onclick = () => nudge(-step());
+  $('#car-next').onclick = () => nudge(step());
+}
+
+let marquee = null; // { raf, pausedUntil }
+function nudge(dx) {
+  const c = $('#carousel'); if (!c) return;
+  if (marquee) marquee.pausedUntil = Date.now() + 4000;
+  c.scrollBy({ left: dx, behavior: 'smooth' });
+}
+
+/** Continuous drift: cards are duplicated once and scrollLeft wraps at the halfway point. */
+function startMarquee(c, navigate) {
+  if (marquee?.raf) cancelAnimationFrame(marquee.raf);
+  marquee = { raf: 0, pausedUntil: 0, hover: false };
+  if (c.children.length < 3 || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  c.insertAdjacentHTML('beforeend', c.innerHTML); // second copy for the seamless wrap
+  c.classList.add('marquee');
+  bindScan(featured, navigate);
+  c.addEventListener('pointerenter', () => { marquee.hover = true; });
+  c.addEventListener('pointerleave', () => { marquee.hover = false; });
+  c.addEventListener('focusin', () => { marquee.hover = true; });
+  c.addEventListener('focusout', () => { marquee.hover = false; });
+  c.addEventListener('pointerdown', () => { marquee.pausedUntil = Date.now() + 4000; });
+  let last = performance.now();
+  let pos = c.scrollLeft; // float; scrollLeft itself truncates sub-pixel moves
+  const speed = 28; // px per second
+  const tick = (now) => {
+    if (!document.body.contains(c)) { marquee = null; return; }
+    const dt = Math.min(64, now - last); last = now;
+    if (!marquee.hover && Date.now() > marquee.pausedUntil && document.visibilityState === 'visible') {
+      const half = c.scrollWidth / 2;
+      if (Math.abs(c.scrollLeft - pos) > 1.5) pos = c.scrollLeft; // user or arrow moved it
+      pos += speed * dt / 1000;
+      if (pos >= half) pos -= half;
+      c.scrollLeft = pos;
+    } else pos = c.scrollLeft;
+    marquee.raf = requestAnimationFrame(tick);
+  };
+  marquee.raf = requestAnimationFrame(tick);
 }

@@ -66,8 +66,8 @@ export function createJobs({ adzunaId = null, adzunaKey = null, fetchImpl = fetc
     return res.json();
   }
 
-  async function searchAdzuna({ q, where, country, page }) {
-    const params = new URLSearchParams({ app_id: adzunaId, app_key: adzunaKey, results_per_page: '20', what: q, 'content-type': 'application/json', sort_by: 'relevance' });
+  async function searchAdzuna({ q, where, country, page, anyOf = false }) {
+    const params = new URLSearchParams({ app_id: adzunaId, app_key: adzunaKey, results_per_page: '20', [anyOf ? 'what_or' : 'what']: q, 'content-type': 'application/json', sort_by: anyOf ? 'date' : 'relevance' });
     if (where) params.set('where', where);
     const data = await getJson(`https://api.adzuna.com/v1/api/jobs/${country}/search/${page}?${params}`);
     return { jobs: (data.results || []).map((r) => normaliseAdzuna(r, country)), total: Number(data.count) || 0, page, hasMore: (data.results || []).length === 20 };
@@ -85,14 +85,14 @@ export function createJobs({ adzunaId = null, adzunaKey = null, fetchImpl = fetc
     source: adzuna ? 'Adzuna' : 'Arbeitnow',
     countries: adzuna ? COUNTRIES : { remote: 'Remote / Europe' },
     /** Search. `country` is an Adzuna code; ignored for Arbeitnow. */
-    async search({ q = '', where = '', country = 'gb', page = 1 } = {}) {
+    async search({ q = '', where = '', country = 'gb', page = 1, anyOf = false } = {}) {
       q = String(q).slice(0, 120).trim(); where = String(where).slice(0, 80).trim();
       country = COUNTRIES[country] ? country : 'gb';
       page = Math.min(Math.max(Number(page) || 1, 1), 20);
-      const key = JSON.stringify([adzuna, q, where, country, page]);
+      const key = JSON.stringify([adzuna, q, where, country, page, anyOf]);
       const hit = cache.get(key);
       if (hit && now() - hit.at < CACHE_TTL) return hit.value;
-      const value = adzuna ? await searchAdzuna({ q: q || 'engineer', where, country, page }) : await searchArbeitnow({ q, page });
+      const value = adzuna ? await searchAdzuna({ q: q || 'engineer', where, country, page, anyOf }) : await searchArbeitnow({ q, page });
       value.source = adzuna ? 'Adzuna' : 'Arbeitnow';
       cache.set(key, { at: now(), value });
       if (cache.size > 500) for (const [k, v] of cache) if (now() - v.at > CACHE_TTL) cache.delete(k);
@@ -100,8 +100,8 @@ export function createJobs({ adzunaId = null, adzunaKey = null, fetchImpl = fetc
     },
     /** A small set for the overview carousel: tech roles, cached for the TTL. */
     async featured({ country = 'gb' } = {}) {
-      const r = await this.search({ q: adzuna ? 'data engineer OR software engineer OR machine learning' : 'engineer', country, page: 1 }).catch((e) => { log.warn?.(`[jobs] featured failed: ${e.message}`); return { jobs: [] }; });
-      return { jobs: r.jobs.slice(0, 10), source: this.source };
+      const r = await this.search({ q: adzuna ? 'engineer developer data scientist devops' : 'engineer', country, page: 1, anyOf: adzuna }).catch((e) => { log.warn?.(`[jobs] featured failed: ${e.message}`); return { jobs: [] }; });
+      return { jobs: r.jobs.slice(0, 20), source: this.source };
     },
   };
 }
