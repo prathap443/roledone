@@ -6,7 +6,7 @@ import { state, session, load, save, reset, forget, setSources, setStorageErrorH
 import { $, $$, esc, toast, modal, closeModal, confirm, download } from './ui.js';
 import { loadStatus, loadBilling, aiAvailable, providerLabel, billingEnabled, authEnabled, startCheckout, confirmCheckout, portal, setToken, getToken, attachDeviceSubscription, usageReport } from './api.js';
 import { sendMagicLink, signInWithGoogle, captureSessionFromUrl, signOut, currentUser } from './auth.js';
-import { PLANS, COMPARISON, plan } from './plans.js';
+import { PLANS, COMPARISON, plan, previewing, grantedPlan } from './plans.js';
 import * as overview from './pages/overview.js';
 import * as scan from './pages/scan.js';
 import * as match from './pages/match.js';
@@ -113,6 +113,7 @@ function showBilling() {
     ? (b.status === 'past_due' ? 'Last payment failed — update your card to keep access.' : b.status === 'canceled' ? 'Cancelled. Access continues until the end of the period.' : renews ? `Renews on ${renews}.` : 'Active.')
     : billingEnabled() ? 'You are on the Free plan: scan, score and see what is missing.' : 'Payments are not live yet.';
   modal(`<div class="eyebrow">PLAN &amp; BILLING</div>
+${previewing() ? `<div class="quota-note">You are <strong>previewing the ${esc(PLANS[plan()].label)} plan</strong> (developer setting). Your real access is ${esc(PLANS[grantedPlan()].label)}. <button class="text-button" id="exit-preview">Exit preview</button></div>` : ''}
 <h2>${b.subscribed ? `${esc(PLANS[b.plan]?.label || 'Paid')} plan` : `${esc(PLANS[current].label)} plan`}</h2>
 <p>${esc(statusLine)}</p>
 ${b.subscribed ? `${b.source === 'device' ? (authEnabled() ? `<p class="hint">This subscription is tied to this browser. <button class="text-button" id="attach-now">Sign in to attach it to your account</button> so it works everywhere.</p>` : '<p class="hint">Your subscription is tied to this browser. Clearing site data or switching device loses access; keep your Stripe receipt.</p>') : `<p class="hint">On your account${currentUser()?.email ? ` (${esc(currentUser().email)})` : ''} — works on any device you sign in to.</p>`}
@@ -122,6 +123,7 @@ ${!b.subscribed && current !== 'free' ? `<p class="hint">You currently have ${es
 ${quotaHtml(b.quota)}${b.admin ? '<details class="developer" id="usage-panel"><summary>Usage &amp; cost this month (admin)</summary><div id="usage-body"><p class="hint">Loading…</p></div></details>' : ''}`);
   $('#usage-panel')?.addEventListener('toggle', async (e) => { if (!e.currentTarget.open) return; try { $('#usage-body').innerHTML = usageHtml(await usageReport()); } catch (error) { $('#usage-body').innerHTML = `<p class="hint">${esc(error.message)}</p>`; } });
   $$('[data-upgrade]', $('#dialog')).forEach((x) => (x.onclick = showPlans));
+  $('#exit-preview')?.addEventListener('click', () => { state.plan = null; save(); closeModal(); render(); renderStatus(); toast('Preview off — full access restored.'); });
   $('#attach-now')?.addEventListener('click', () => (currentUser() ? afterSignIn() : showSignIn({ reason: 'Sign in to attach the subscription on this device to your account.' })));
   $('#manage-sub')?.addEventListener('click', async (e) => { const button = e.currentTarget; button.disabled = true; try { const { url } = await portal(); stash(); location.href = url; } catch (error) { toast(error.message); button.disabled = false; } });
 }
@@ -190,9 +192,9 @@ function renderStatus() {
   si.textContent = currentUser() ? (currentUser().email || 'Account') : 'Sign in';
   si.classList.toggle('signed', Boolean(currentUser()));
   const chip = $('#plan-chip');
-  chip.textContent = b.admin ? 'Admin · all features' : b.subscribed ? `${PLANS[b.plan]?.label || 'Paid'}${b.status === 'past_due' ? ' · payment failed' : b.renews ? ` · renews ${new Date(b.renews).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}` : `${PLANS[current].label}${billingEnabled() && current === 'free' ? ' · See plans' : ''}`;
+  chip.textContent = previewing() ? `Previewing ${PLANS[plan()].label} · click to exit` : b.admin ? 'Admin · all features' : b.subscribed ? `${PLANS[b.plan]?.label || 'Paid'}${b.status === 'past_due' ? ' · payment failed' : b.renews ? ` · renews ${new Date(b.renews).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}` : `${PLANS[current].label}${billingEnabled() && current === 'free' ? ' · See plans' : ''}`;
   chip.classList.toggle('paid', Boolean(b.subscribed || b.admin));
-  chip.classList.toggle('warn', b.status === 'past_due');
+  chip.classList.toggle('warn', b.status === 'past_due' || previewing());
 }
 
 async function loadSample() {
@@ -219,11 +221,11 @@ $('#settings').onclick = () => {
 <label class="field"><span><input type="checkbox" id="remember" ${state.remember ? 'checked' : ''}> Save my workspace on this device</span></label>
 ${aiAvailable() ? `<label class="field"><span><input type="checkbox" id="consent" ${state.aiConsent ? 'checked' : ''}> Send text to ${esc(providerLabel())} without asking each time</span></label>` : ''}
 <p class="hint">Your plan and subscription live under <button class="text-button" id="open-billing">Plan &amp; billing</button>.</p>
-${session.billing?.subscribed ? '' : `<details class="developer"><summary>Developer</summary><label class="field inline">Plan preview (${billingEnabled() ? 'client-side only; the server still enforces what you have paid for' : 'not enforced until billing is on'})<select id="plan"><option value="" ${state.plan == null ? 'selected' : ''}>Server default (${PLANS[session.ai?.defaultPlan || 'free'].label})</option>${Object.entries(PLANS).map(([k, p]) => `<option value="${k}" ${state.plan === k ? 'selected' : ''}>${p.label} · ${p.price}</option>`).join('')}</select></label></details>`}
+${session.billing?.admin && !session.billing?.subscribed ? `<details class="developer" ${previewing() ? 'open' : ''}><summary>Developer (admin)</summary><label class="field inline">Preview the app as another plan (this browser only; the server still treats you as admin)<select id="plan"><option value="" ${state.plan == null ? 'selected' : ''}>Server default (${PLANS[session.ai?.defaultPlan || 'free'].label})</option>${Object.entries(PLANS).map(([k, p]) => `<option value="${k}" ${state.plan === k ? 'selected' : ''}>${p.label} · ${p.price}</option>`).join('')}</select></label></details>` : ''}
 <div class="actions"><button class="secondary" id="export-workspace">Export workspace</button><button class="secondary" id="clear-workspace">Clear all workspace data</button></div>`);
   $('#remember').onchange = (e) => { state.remember = e.target.checked; if (!state.remember) forget(); save(); toast(state.remember ? 'Device saving enabled.' : 'Device saving disabled.'); };
   $('#consent') && ($('#consent').onchange = (e) => { state.aiConsent = e.target.checked; save(); });
-  $('#plan') && ($('#plan').onchange = (e) => { state.plan = e.target.value || null; save(); render(); renderStatus(); toast(`${PLANS[plan()].label} plan (preview).`); });
+  $('#plan') && ($('#plan').onchange = (e) => { state.plan = e.target.value || null; save(); render(); renderStatus(); toast(previewing() ? `Previewing the ${PLANS[plan()].label} plan. Click the plan chip to exit.` : 'Preview off.'); });
   $('#open-billing').onclick = () => { closeModal(); showBilling(); };
   $('#export-workspace').onclick = () => download('roledone-workspace.json', JSON.stringify(state, null, 2), 'application/json');
   $('#clear-workspace').onclick = async () => {
